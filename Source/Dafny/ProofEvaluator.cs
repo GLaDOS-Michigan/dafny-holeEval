@@ -325,6 +325,12 @@ namespace Microsoft.Dafny {
       // } else {
       //   Console.WriteLine($"  3 checkType = false");
       // }
+      if (expr == null && trigger != null) {
+        return false;
+      }
+      if (expr != null && trigger == null) {
+        return false;
+      }
       if (isPredicateName) {
         var exprStrList = Printer.ExprToString(expr).Split('.');
         var exprStr = exprStrList[exprStrList.Length - 1];
@@ -334,10 +340,17 @@ namespace Microsoft.Dafny {
       if (expr.Type.ToString() != trigger.Type.ToString() && trigger.Type.ToString() != "T") {
         return false;
       }
-      if (expr is IdentifierExpr && trigger is IdentifierExpr) {
+      if (expr is IdentifierExpr) {
         return true;
-      } else if (trigger is NameSegment) {
+      } else if (expr is NameSegment) {
         return true;
+      } else if (expr is LiteralExpr && trigger is LiteralExpr) {
+        var exprLiteral = expr as LiteralExpr;
+        var triggerLiteral = trigger as LiteralExpr;
+        if (exprLiteral.Type.ToString() == triggerLiteral.Type.ToString())
+          return true;
+        else
+          return false;
       } else if (expr is ApplySuffix && trigger is ApplySuffix) {
         var exprSuffix = expr as ApplySuffix;
         var triggerSuffix = trigger as ApplySuffix;
@@ -381,6 +394,26 @@ namespace Microsoft.Dafny {
         } else {
           return false;
         }
+      } else if (expr is BinaryExpr && trigger is BinaryExpr) {
+        var binaryExpr = expr as BinaryExpr;
+        var triggerBinaryExpr = trigger as BinaryExpr;
+        if (binaryExpr.Op != triggerBinaryExpr.Op) {
+          return false;
+        }
+        if (!IsCompatibleTrigger(binaryExpr.E0, triggerBinaryExpr.E0)) {
+          return false;
+        }
+        if (!IsCompatibleTrigger(binaryExpr.E1, triggerBinaryExpr.E1)) {
+          return false;
+        }
+        return true;
+      // } else if (expr is BinaryExpr) {
+      //   if (IsCompatibleTrigger((expr as BinaryExpr).E0, trigger)) {
+      //     return true;
+      //   }
+      //   if (IsCompatibleTrigger((expr as BinaryExpr).E1, trigger)) {
+      //     return true;
+      //   }
       }
       return false;
     }
@@ -499,18 +532,18 @@ namespace Microsoft.Dafny {
           }
         }
       }
-      if (DafnyOptions.O.ProofEvaluatorCollectAllTriggerMatches) {
-        foreach (var t in typeToTriggerDict.Keys) {
-          // Console.WriteLine("--------------------------------");
-          // Console.WriteLine($"{t} {typeToTriggerDict[t].Count}");
-          foreach (var trigger in typeToTriggerDict[t]) {
-            var triggerStr = Printer.ExprToString(trigger);
-            numberOfMatches.Add(triggerStr, 0);
-            // Console.WriteLine(triggerStr);
-          }
-          // Console.WriteLine("--------------------------------");
-        }
-      }
+      // if (DafnyOptions.O.ProofEvaluatorCollectAllTriggerMatches) {
+        // foreach (var t in typeToTriggerDict.Keys) {
+        //   Console.WriteLine("--------------------------------");
+        //   Console.WriteLine($"{t} {typeToTriggerDict[t].Count}");
+        //   foreach (var trigger in typeToTriggerDict[t]) {
+        //     var triggerStr = Printer.ExprToString(trigger);
+        //     // numberOfMatches.Add(triggerStr, 0);
+        //     Console.WriteLine(triggerStr);
+        //   }
+        //   Console.WriteLine("--------------------------------");
+        // }
+      // }
       // var subLemmas = GetSubLemmas(program, desiredLemma);
       // foreach (var subLemma in subLemmas) {
       //   Console.WriteLine("-------");
@@ -535,7 +568,7 @@ namespace Microsoft.Dafny {
       if (desiredLemma != null) {
         var expressions = expressionFinder.ListArguments(program, desiredLemma);
         var extendedExpressions = expressionFinder.ExtendSeqSelectExpressions(expressions);
-        typeToExpressionDict = expressionFinder.GetRawExpressions(program, desiredLemma, expressions, true);
+        typeToExpressionDict = expressionFinder.GetRawExpressions(program, desiredLemma, extendedExpressions, true);
       } else {
         Console.WriteLine($"{lemmaName} was not found!");
         return false;
@@ -563,16 +596,16 @@ namespace Microsoft.Dafny {
       var numberOfMatchedExpressions = 0;
       var selectedExpressions = new List<ExpressionFinder.ExpressionDepth>();
       for (int i = 0; i < expressionFinder.availableExpressions.Count; i++) {
-        Console.WriteLine($"{i} {Printer.ExprToString(expressionFinder.availableExpressions[i].expr)}");
+        // Console.WriteLine($"{i} {Printer.ExprToString(expressionFinder.availableExpressions[i].expr)}");
         if (expressionFinder.availableExpressions[i].depth != expressionDepth) {
           continue;
         }
         var matchingTrigger = DoesMatchWithAnyTrigger(expressionFinder.availableExpressions[i].expr, typeToTriggerDict);
         if (i == 0 || matchingTrigger != null) {
           if (i != 0) {
-            Console.WriteLine($"{i} {Printer.ExprToString(expressionFinder.availableExpressions[i].expr)} " +
-              $"{expressionFinder.availableExpressions[i].expr.Type.ToString()} " +
-              "\t\t" + Printer.ExprToString(matchingTrigger));
+            // Console.WriteLine($"{i} {Printer.ExprToString(expressionFinder.availableExpressions[i].expr)} " +
+              // $"{expressionFinder.availableExpressions[i].expr.Type.ToString()} " +
+              // "\t\t" + Printer.ExprToString(matchingTrigger));
             numberOfMatchedExpressions++;
           }
           selectedExpressions.Add(expressionFinder.availableExpressions[i]);

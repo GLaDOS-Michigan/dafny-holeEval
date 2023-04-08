@@ -132,11 +132,26 @@ namespace Microsoft.Dafny {
     }
 
     public IEnumerable<ExpressionDepth> ExtendSeqSelectExpressions(IEnumerable<ExpressionDepth> expressionList) {
-      Console.WriteLine("here");
-      var typeToExpressionDict = GetTypeToExpressionDict(expressionList);
+      // Console.WriteLine("here");
       foreach (var exprDepth in expressionList) {
-        if (exprDepth.expr is SeqSelectExpr) {
-          Console.WriteLine($"ExtendSeqSelect: {Printer.ExprToString(exprDepth.expr)}");
+        yield return exprDepth;
+      }
+      var typeToExpressionDict = GetTypeToExpressionDict(expressionList);
+      if (typeToExpressionDict.ContainsKey("int")) {
+        var intVarList = typeToExpressionDict["int"];
+        foreach (var type in typeToExpressionDict.Keys) {
+          var firstElem = typeToExpressionDict[type][0];
+          if (firstElem.expr.Type is SeqType) {
+            var seqVarList = typeToExpressionDict[type];
+            for (int i = 0; i < seqVarList.Count; i++) {
+              var seqVar = seqVarList[i];
+              for (int j = 0; j < intVarList.Count; j++) {
+                var seqSelectExpr = new SeqSelectExpr(seqVar.expr.tok, true, seqVar.expr, intVarList[j].expr, null, null);
+                seqSelectExpr.Type = (seqVar.expr.Type as SeqType).Arg;
+                yield return new ExpressionDepth(seqSelectExpr, Math.Max(seqVar.depth, intVarList[j].depth) + 1);
+              }
+            }
+          }
         }
       }
       yield break;
@@ -187,22 +202,22 @@ namespace Microsoft.Dafny {
     public Dictionary<string, List<ExpressionDepth>> GetRawExpressions(Program program, MemberDecl decl,
         IEnumerable<ExpressionDepth> expressions, bool addToAvailableExpressions) {
       var typeToExpressionDict = GetTypeToExpressionDict(expressions);
-      // foreach (var kvp in program.ModuleSigs) {
-      //   foreach (var d in kvp.Value.ModuleDef.TopLevelDecls) {
-      //     var cl = d as TopLevelDeclWithMembers;
-      //     if (cl != null) {
-      //       foreach (var member in cl.Members) {
-      //         if (member is Predicate) {
-      //           var predicateInvocations = GetAllPossiblePredicateInvocations(program, member as Predicate, typeToExpressionDict);
-      //           if (!typeToExpressionDict.ContainsKey("bool")) {
-      //             typeToExpressionDict.Add("bool", new List<Expression>());
-      //           }
-      //           typeToExpressionDict["bool"].AddRange(predicateInvocations);
-      //         }
-      //       }
-      //     }
-      //   }
-      // }
+      foreach (var kvp in program.ModuleSigs) {
+        foreach (var d in kvp.Value.ModuleDef.TopLevelDecls) {
+          var cl = d as TopLevelDeclWithMembers;
+          if (cl != null) {
+            foreach (var member in cl.Members) {
+              if (member is Predicate) {
+                var predicateInvocations = GetAllPossiblePredicateInvocations(program, member as Predicate, typeToExpressionDict);
+                if (!typeToExpressionDict.ContainsKey("bool")) {
+                  typeToExpressionDict.Add("bool", new List<ExpressionDepth>());
+                }
+                typeToExpressionDict["bool"].AddRange(predicateInvocations);
+              }
+            }
+          }
+        }
+      }
       if (decl is Function) {
         var desiredFunction = decl as Function;
         var equalExprToCheck = desiredFunction.Body;
@@ -483,19 +498,21 @@ namespace Microsoft.Dafny {
       return result;
     }
 
-    public static IEnumerable<Expression> ListPredicateInvocations(
+    public static IEnumerable<ExpressionDepth> ListPredicateInvocations(
         Predicate func,
-        Dictionary<string, List<Expression>> typeToExpressionDict,
-        List<Expression> arguments,
+        Dictionary<string, List<ExpressionDepth>> typeToExpressionDict,
+        List<ExpressionDepth> arguments,
         int shouldFillIndex) {
       if (shouldFillIndex == func.Formals.Count) {
         List<ActualBinding> bindings = new List<ActualBinding>();
+        var depth = 0;
         foreach (var arg in arguments) {
-          bindings.Add(new ActualBinding(null, arg));
+          bindings.Add(new ActualBinding(null, arg.expr));
+          depth = Math.Max(depth, arg.depth);
         }
         var applySuffixExpr = new ApplySuffix(func.tok, null, new IdentifierExpr(func.tok, func.FullDafnyName), bindings, null);
         applySuffixExpr.Type = func.ResultType;
-        yield return applySuffixExpr;
+        yield return new ExpressionDepth(applySuffixExpr, depth);
         yield break;
       }
       var t = func.Formals[shouldFillIndex].Type;
@@ -510,11 +527,11 @@ namespace Microsoft.Dafny {
       }
     }
 
-    public static List<Expression> GetAllPossiblePredicateInvocations(Program program,
+    public static List<ExpressionDepth> GetAllPossiblePredicateInvocations(Program program,
         Predicate func,
-        Dictionary<string, List<Expression>> typeToExpressionDict) {
-      List<Expression> result = new List<Expression>();
-      List<Expression> workingList = new List<Expression>();
+        Dictionary<string, List<ExpressionDepth>> typeToExpressionDict) {
+      List<ExpressionDepth> result = new List<ExpressionDepth>();
+      List<ExpressionDepth> workingList = new List<ExpressionDepth>();
       foreach (var expr in ListPredicateInvocations(func, typeToExpressionDict, workingList, 0)) {
         result.Add(expr);
       }
@@ -536,6 +553,49 @@ namespace Microsoft.Dafny {
       }
     }
 
+    public IEnumerable<ExpressionDepth> ListArguments(Program program, Statement stmt) {
+      if (stmt.Tok.line > DafnyOptions.O.ProofEvaluatorInsertionPoint) {
+        yield break;
+      }
+      if (stmt is BlockStmt) {
+        foreach (var s in (stmt as BlockStmt).Body) {
+          foreach (var exprDepth in ListArguments(program, s)) {
+            yield return exprDepth;
+          }
+        }
+      }
+      else if (stmt is IfStmt) {
+        var ifStmt = stmt as IfStmt;
+        foreach (var s in ifStmt.Thn.Body) {
+          foreach (var exprDepth in ListArguments(program, s)) {
+            yield return exprDepth;
+          }
+        }
+        foreach (var exprDepth in ListArguments(program, ifStmt.Els)) {
+          yield return exprDepth;
+        }
+      }
+      else if (stmt is VarDeclStmt) {
+        var varDecl = stmt as VarDeclStmt;
+        // var identExpr = Expression.CreateIdentExpr(varDecl.Update.Lhss[0]);
+        foreach (var exprDepth in TraverseFormal(program, new ExpressionDepth(varDecl.Update.Lhss[0], 1))) {
+          yield return exprDepth;
+        }
+      }
+      else if (stmt is ForallStmt) {
+        var forallStmt = stmt as ForallStmt;
+        foreach (var exprDepth in ListArguments(program, forallStmt.Body)) {
+          yield return exprDepth;
+        }
+        foreach (var boundVar in forallStmt.BoundVars) {
+          var identExpr = Expression.CreateIdentExpr(boundVar);
+          foreach (var exprDepth in TraverseFormal(program, new ExpressionDepth(identExpr, 1))) {
+            yield return exprDepth;
+          }
+        }
+      }
+    }
+
     public IEnumerable<ExpressionDepth> ListArguments(Program program, Lemma lemma) {
       foreach (var formal in lemma.Ins) {
         var identExpr = Expression.CreateIdentExpr(formal);
@@ -548,6 +608,9 @@ namespace Microsoft.Dafny {
         foreach (var expr in TraverseFormal(program, new ExpressionDepth(identExpr, 1))) {
           yield return expr;
         }
+      }
+      foreach (var exprDepth in ListArguments(program, lemma.Body)) {
+        yield return exprDepth;
       }
     }
 
@@ -584,14 +647,46 @@ namespace Microsoft.Dafny {
             yield return new ExpressionDepth(cardinalityExpr, exprDepth.depth + 1);
           }
           if (t is SeqType) {
-            var zeroLiteralExpr = Expression.CreateIntLiteral(expr.tok, 0);
-            var zerothElement = new SeqSelectExpr(expr.tok, true, expr, zeroLiteralExpr, null, null);
-            var st = t as SeqType;
-            zerothElement.Type = st.Arg;
-            foreach (var e in TraverseFormal(program, new ExpressionDepth(zerothElement, exprDepth.depth + 1))) {
-              yield return e;
+            {
+              // create 0th element of a sequence
+              var zeroLiteralExpr = Expression.CreateIntLiteral(expr.tok, 0);
+              var zerothElement = new SeqSelectExpr(expr.tok, true, expr, zeroLiteralExpr, null, null);
+              var st = t as SeqType;
+              zerothElement.Type = st.Arg;
+              foreach (var e in TraverseFormal(program, new ExpressionDepth(zerothElement, exprDepth.depth + 1))) {
+                yield return e;
+              }
             }
-            // create 0th element of the sequence
+
+            {
+              // create last element of a sequence
+              var cardinalityExpr = Expression.CreateCardinality(expr, program.BuiltIns);
+              var lastElementExpr = Expression.CreateDecrement(cardinalityExpr, 1);
+              var lastElement = new SeqSelectExpr(expr.tok, true, expr, lastElementExpr, null, null);
+              lastElement.Type = (t as SeqType).Arg;
+              foreach (var e in TraverseFormal(program, new ExpressionDepth(lastElement, exprDepth.depth + 1))) {
+                yield return e;
+              }
+            }
+
+            if (exprDepth.depth < maxExpressionDepth)
+            {
+              {
+                // create DropFirst of a sequence
+                var oneLiteralExpr = Expression.CreateIntLiteral(expr.tok, 1);
+                var dropFirstElement = new SeqSelectExpr(expr.tok, false, expr, oneLiteralExpr, null, null);
+                dropFirstElement.Type = t;
+                yield return new ExpressionDepth(dropFirstElement, exprDepth.depth + 1);
+              }
+
+              {
+                // create drop last element of a sequence
+                var cardinalityExpr = Expression.CreateCardinality(expr, program.BuiltIns);
+                var dropLastElement = new SeqSelectExpr(expr.tok, false, expr, null, cardinalityExpr, null);
+                dropLastElement.Type = t;
+                yield return new ExpressionDepth(dropLastElement, exprDepth.depth + 1);
+              }
+            }
           }
         }
         // Console.WriteLine("pre-defined variable type");
