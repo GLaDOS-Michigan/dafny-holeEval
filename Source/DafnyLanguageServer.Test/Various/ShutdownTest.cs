@@ -71,21 +71,12 @@ namespace Microsoft.Dafny.LanguageServer.IntegrationTest.Various {
 
       // Wait for the language server to kill itself by waiting until it closes the output stream.
       await process.StandardOutput.ReadToEndAsync();
+      Thread.Sleep(300); // Give the process some time to die
 
-      for (int attempts = 0; attempts < 500; attempts++) {
-        // Give the language server time to kill itself
-        await Task.Delay(10);
-
-        try {
-          Process.GetProcessById(int.Parse(languageServerProcessId));
-        } catch {
-          return;
-        }
-      }
-
-      var languageServer = Process.GetProcessById(int.Parse(languageServerProcessId));
-      languageServer.Kill();
-      Assert.Fail("Language server should have killed itself if the parent is gone.");
+      Assert.ThrowsException<ArgumentException>(() => {
+        var languageServer = Process.GetProcessById(int.Parse(languageServerProcessId));
+        languageServer.Kill();
+      }, "Language server should have killed itself if the parent is gone.");
     }
 
     private static async Task<Process> StartLanguageServerRunnerProcess() {

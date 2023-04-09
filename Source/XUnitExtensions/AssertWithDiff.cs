@@ -6,11 +6,10 @@ using Xunit.Sdk;
 
 namespace XUnitExtensions {
   public class AssertWithDiff {
-
-    public static string? GetDiffMessage(string expected, string actual) {
-      var diff = InlineDiffBuilder.Instance.BuildDiffModel(expected, actual, false);
+    public static void Equal(string expected, string actual) {
+      var diff = InlineDiffBuilder.Instance.BuildDiffModel(expected, actual);
       if (!diff.HasDifferences) {
-        return null;
+        return;
       }
 
       var message = new StringBuilder();
@@ -26,14 +25,7 @@ namespace XUnitExtensions {
         message.AppendLine(line.Text);
       }
 
-      return message.ToString();
-    }
-
-    public static void Equal(string expected, string actual) {
-      var diffMessage = GetDiffMessage(expected, actual);
-      if (diffMessage != null) {
-        throw new AssertActualExpectedException(expected, actual, diffMessage);
-      }
+      throw new AssertActualExpectedException(expected, actual, message.ToString());
     }
   }
 }

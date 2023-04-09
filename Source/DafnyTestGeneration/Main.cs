@@ -2,7 +2,6 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Threading.Tasks;
 using Microsoft.Dafny;
 using Program = Microsoft.Dafny.Program;
 
@@ -17,7 +16,7 @@ namespace DafnyTestGeneration {
     /// loop unrolling may cause false negatives.
     /// </summary>
     /// <returns></returns>
-    public static async IAsyncEnumerable<string> GetDeadCodeStatistics(Program program) {
+    public static IEnumerable<string> GetDeadCodeStatistics(Program program) {
 
       var modifications = GetModifications(program).ToList();
       var blocksReached = modifications.Count;
@@ -26,7 +25,7 @@ namespace DafnyTestGeneration {
 
       // Generate tests based on counterexamples produced from modifications
       for (var i = modifications.Count - 1; i >= 0; i--) {
-        await modifications[i].GetCounterExampleLog();
+        modifications[i].GetCounterExampleLog();
         var deadStates = ((BlockBasedModification)modifications[i]).GetKnownDeadStates();
         if (deadStates.Count != 0) {
           foreach (var capturedState in deadStates) {
@@ -45,15 +44,14 @@ namespace DafnyTestGeneration {
                    $"loops. False positives are always possible.";
     }
 
-    public static async IAsyncEnumerable<string> GetDeadCodeStatistics(string sourceFile) {
-      var source = await new StreamReader(sourceFile).ReadToEndAsync();
+    public static IEnumerable<string> GetDeadCodeStatistics(string sourceFile) {
+      var source = new StreamReader(sourceFile).ReadToEnd();
       var program = Utils.Parse(source, sourceFile);
       if (program == null) {
         yield return "Cannot parse program";
         yield break;
       }
-
-      await foreach (var line in GetDeadCodeStatistics(program)) {
+      foreach (var line in GetDeadCodeStatistics(program)) {
         yield return line;
       }
     }
@@ -63,7 +61,7 @@ namespace DafnyTestGeneration {
       var oldPrintInstrumented = DafnyOptions.O.PrintInstrumented;
       DafnyOptions.O.PrintInstrumented = true;
       var boogiePrograms = Translator
-        .Translate(program, program.Reporter)
+        .Translate(program, program.reporter)
         .ToList().ConvertAll(tuple => tuple.Item2);
       DafnyOptions.O.PrintInstrumented = oldPrintInstrumented;
 
@@ -79,7 +77,7 @@ namespace DafnyTestGeneration {
     /// Generate test methods for a certain Dafny program.
     /// </summary>
     /// <returns></returns>
-    public static async IAsyncEnumerable<TestMethod> GetTestMethodsForProgram(
+    public static IEnumerable<TestMethod> GetTestMethodsForProgram(
       Program program, DafnyInfo? dafnyInfo = null) {
 
       dafnyInfo ??= new DafnyInfo(program);
@@ -88,7 +86,7 @@ namespace DafnyTestGeneration {
       // Generate tests based on counterexamples produced from modifications
       var testMethods = new ConcurrentBag<TestMethod>();
       for (var i = modifications.Count - 1; i >= 0; i--) {
-        var log = await modifications[i].GetCounterExampleLog();
+        var log = modifications[i].GetCounterExampleLog();
         if (log == null) {
           continue;
         }
@@ -104,9 +102,8 @@ namespace DafnyTestGeneration {
     /// <summary>
     /// Return a Dafny class (list of lines) with tests for the given Dafny file
     /// </summary>
-    public static async IAsyncEnumerable<string> GetTestClassForProgram(string sourceFile) {
+    public static IEnumerable<string> GetTestClassForProgram(string sourceFile) {
 
-      TestMethod.ClearTypesToSynthesize();
       var source = new StreamReader(sourceFile).ReadToEnd();
       var program = Utils.Parse(source, sourceFile);
       if (program == null) {
@@ -125,11 +122,9 @@ namespace DafnyTestGeneration {
         yield return $"import {module}";
       }
 
-      await foreach (var method in GetTestMethodsForProgram(program, dafnyInfo)) {
+      foreach (var method in GetTestMethodsForProgram(program, dafnyInfo)) {
         yield return method.ToString();
       }
-
-      yield return TestMethod.EmitSynthesizeMethods();
 
       yield return "}";
     }

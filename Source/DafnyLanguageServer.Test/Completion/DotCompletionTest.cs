@@ -1,15 +1,29 @@
 ﻿using Microsoft.Dafny.LanguageServer.IntegrationTest.Extensions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using OmniSharp.Extensions.LanguageServer.Protocol.Client;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.Dafny.LanguageServer.IntegrationTest.Util;
 
 namespace Microsoft.Dafny.LanguageServer.IntegrationTest.Completion {
   [TestClass]
-  public class DotCompletionTest : ClientBasedLanguageServerTest {
+  public class DotCompletionTest : DafnyLanguageServerTestBase {
+    // At this time, the main logic happens within ISymbolGuesser since we have to primarily work
+    // with migrated symbol tables. Therefore, we apply modifications prior requesting completion
+    // just like a user would do.
+    private ILanguageClient client;
+
+    private void ApplyChanges(TextDocumentItem documentItem, params TextDocumentContentChangeEvent[] changes) {
+      client.DidChangeTextDocument(new DidChangeTextDocumentParams {
+        TextDocument = new OptionalVersionedTextDocumentIdentifier {
+          Uri = documentItem.Uri,
+          Version = documentItem.Version + 1
+        },
+        ContentChanges = changes
+      });
+    }
 
     private async Task<List<CompletionItem>> RequestCompletionAsync(TextDocumentItem documentItem, Position position) {
       // TODO at this time we do not set the context since it appears that's also the case when used within VSCode.
@@ -21,6 +35,11 @@ namespace Microsoft.Dafny.LanguageServer.IntegrationTest.Completion {
         CancellationToken
       ).AsTask();
       return completionList.OrderBy(completion => completion.Label).ToList();
+    }
+
+    [TestInitialize]
+    public async Task SetUp() {
+      client = await InitializeClient();
     }
 
     [TestMethod]
@@ -35,7 +54,13 @@ class A {
 }".TrimStart();
       var documentItem = CreateTestDocument(source);
       await client.OpenDocumentAndWaitAsync(documentItem, CancellationToken);
-      ApplyChange(ref documentItem, new Range(4, 10, 4, 10), " + this.");
+      ApplyChanges(
+        documentItem,
+        new TextDocumentContentChangeEvent {
+          Range = new Range((4, 10), (4, 10)),
+          Text = " + this."
+        }
+      );
 
       var completionList = await RequestCompletionAsync(documentItem, (4, 18));
       Assert.AreEqual(2, completionList.Count);
@@ -57,7 +82,13 @@ class A {
 }".TrimStart();
       var documentItem = CreateTestDocument(source);
       await client.OpenDocumentAndWaitAsync(documentItem, CancellationToken);
-      ApplyChange(ref documentItem, new Range((4, 4), (4, 10)), ".");
+      ApplyChanges(
+        documentItem,
+        new TextDocumentContentChangeEvent {
+          Range = new Range((4, 4), (4, 10)),
+          Text = "."
+        }
+      );
 
       var completionList = await RequestCompletionAsync(documentItem, (4, 5));
       Assert.AreEqual(0, completionList.Count);
@@ -75,7 +106,13 @@ class A {
 }".TrimStart();
       var documentItem = CreateTestDocument(source);
       await client.OpenDocumentAndWaitAsync(documentItem, CancellationToken);
-      ApplyChange(ref documentItem, new Range((4, 0), (4, 10)), ".");
+      ApplyChanges(
+        documentItem,
+        new TextDocumentContentChangeEvent {
+          Range = new Range((4, 0), (4, 10)),
+          Text = "."
+        }
+      );
 
       var completionList = await RequestCompletionAsync(documentItem, (4, 1));
       Assert.AreEqual(0, completionList.Count);
@@ -93,7 +130,13 @@ class A {
 }".TrimStart();
       var documentItem = CreateTestDocument(source);
       await client.OpenDocumentAndWaitAsync(documentItem, CancellationToken);
-      ApplyChange(ref documentItem, new Range((4, 10), (4, 10)), ".");
+      ApplyChanges(
+        documentItem,
+        new TextDocumentContentChangeEvent {
+          Range = new Range((4, 10), (4, 10)),
+          Text = "."
+        }
+      );
 
       var completionList = await RequestCompletionAsync(documentItem, (4, 11));
       Assert.AreEqual(0, completionList.Count);
@@ -107,8 +150,14 @@ method DoIt() {
 }".TrimStart();
       var documentItem = CreateTestDocument(source);
       await client.OpenDocumentAndWaitAsync(documentItem, CancellationToken);
-      ApplyChange(ref documentItem, new Range((1, 23), (1, 23)), @"
-  var y := x.");
+      ApplyChanges(
+        documentItem,
+        new TextDocumentContentChangeEvent {
+          Range = new Range((1, 23), (1, 23)),
+          Text = @"
+  var y := x."
+        }
+      );
 
       var completionList = await RequestCompletionAsync(documentItem, (2, 13));
       Assert.AreEqual(1, completionList.Count);
@@ -134,8 +183,14 @@ class B {
 }".TrimStart();
       var documentItem = CreateTestDocument(source);
       await client.OpenDocumentAndWaitAsync(documentItem, CancellationToken);
-      ApplyChange(ref documentItem, new Range((4, 21), (4, 21)), @"
-    var y := x.");
+      ApplyChanges(
+        documentItem,
+        new TextDocumentContentChangeEvent {
+          Range = new Range((4, 21), (4, 21)),
+          Text = @"
+    var y := x."
+        }
+      );
 
       var completionList = await RequestCompletionAsync(documentItem, (5, 15));
       Assert.AreEqual(1, completionList.Count);
@@ -161,8 +216,14 @@ class B {
 }".TrimStart();
       var documentItem = CreateTestDocument(source);
       await client.OpenDocumentAndWaitAsync(documentItem, CancellationToken);
-      ApplyChange(ref documentItem, new Range((4, 21), (4, 21)), @"
-    var y := this.x.");
+      ApplyChanges(
+        documentItem,
+        new TextDocumentContentChangeEvent {
+          Range = new Range((4, 21), (4, 21)),
+          Text = @"
+    var y := this.x."
+        }
+      );
 
       var completionList = await RequestCompletionAsync(documentItem, (5, 20));
       Assert.AreEqual(1, completionList.Count);
@@ -210,8 +271,13 @@ class X {
 }".TrimStart();
       var documentItem = CreateTestDocument(source);
       await client.OpenDocumentAndWaitAsync(documentItem, CancellationToken);
-
-      ApplyChange(ref documentItem, new Range((8, 0), (8, 0)), "    var l := b.c.x.");
+      ApplyChanges(
+        documentItem,
+        new TextDocumentContentChangeEvent {
+          Range = new Range((8, 0), (8, 0)),
+          Text = "    var l := b.c.x."
+        }
+      );
 
       var completionList = await RequestCompletionAsync(documentItem, (8, 19));
       Assert.AreEqual(1, completionList.Count);

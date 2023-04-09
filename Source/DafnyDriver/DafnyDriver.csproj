@@ -8,12 +8,6 @@
       <TargetFramework>net6.0</TargetFramework>
       <OutputPath>..\..\Binaries\</OutputPath>
       <ValidateExecutableReferencesMatchSelfContained>false</ValidateExecutableReferencesMatchSelfContained>
-
-      <VersionPrefix>3.8.1.40901</VersionPrefix>
-
-      <PackAsTool>true</PackAsTool>
-      <ToolCommandName>dafny</ToolCommandName>
-      <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net6.0|AnyCPU'">
@@ -29,7 +23,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.TestPlatform.Extensions.TrxLogger" Version="17.0.0" />
     <PackageReference Include="Microsoft.TestPlatform.TestHost" Version="16.11.0" />
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
+    <PackageReference Include="Newtonsoft.Json" Version="11.0.2" />
       
     <!-- Locking down versions that would otherwise be downgraded -->
     <PackageReference Include="System.Security.Principal.Windows" Version="4.5.0" />

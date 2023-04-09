@@ -3,7 +3,7 @@
     <PropertyGroup>
         <OutputType>Library</OutputType>
         <AssemblyName>DafnyTestGeneration</AssemblyName>
-        <IsPackable>false</IsPackable>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
         <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
         <DefineConstants>TRACE</DefineConstants>
         <PackageVersion>1.1.0</PackageVersion>

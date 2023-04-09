@@ -14,7 +14,7 @@ namespace Microsoft.Dafny {
 
     public ConcreteSyntaxTree Tree { get; }
 
-    public void Render(TextWriter writer, int indentation, WriterState writerState, Queue<FileSyntax> files, int indentSize = 2) {
+    public void Render(TextWriter writer, int indentation, WriterState writerState, Queue<FileSyntax> files) {
       files.Enqueue(this);
     }
   }

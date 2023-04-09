@@ -6,11 +6,9 @@
       <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
       <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
       <DefineConstants>TRACE;ISDAFNYRUNTIMELIB</DefineConstants>
-      <VersionPrefix>1.2.0</VersionPrefix>
+      <PackageVersion>1.1.0</PackageVersion>
       <TargetFramework>net6.0</TargetFramework>
       <OutputPath>..\..\Binaries\</OutputPath>
-      <LangVersion>7.3</LangVersion>
-      <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
 
   <ItemGroup>
@@ -31,7 +29,7 @@
 
   <ItemGroup>
     <DafnyRuntimeJavaInputFile Include="./DafnyRuntimeJava/**/*.*" />
-    <!-- <DafnyRuntimeJavaInputFile Remove="./DafnyRuntimeJava/build/**/*.*" /> -->
+    <DafnyRuntimeJavaInputFile Remove="./DafnyRuntimeJava/build/**/*.*" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 using Microsoft.Boogie;
 
 namespace DafnyTestGeneration {
@@ -18,12 +17,12 @@ namespace DafnyTestGeneration {
       this.capturedStates = capturedStates;
     }
 
-    public override async Task<string?> GetCounterExampleLog() {
+    public override string? GetCounterExampleLog() {
 
       if (covered.Contains(blockId)) {
         return null;
       }
-      var log = await base.GetCounterExampleLog();
+      var log = base.GetCounterExampleLog();
       if (log == null) {
         return null;
       }

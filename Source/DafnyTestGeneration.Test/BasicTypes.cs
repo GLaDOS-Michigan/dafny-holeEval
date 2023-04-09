@@ -1,6 +1,5 @@
 using System.Linq;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace DafnyTestGeneration.Test {
@@ -14,7 +13,7 @@ namespace DafnyTestGeneration.Test {
     }
 
     [TestMethod]
-    public async Task Ints() {
+    public void Ints() {
       var source = @"
 class SimpleTest {
   static method compareToZero(i: int) returns (ret: int) {
@@ -28,7 +27,7 @@ class SimpleTest {
 }
 ".TrimStart();
       var program = Utils.Parse(source);
-      var methods = await Main.GetTestMethodsForProgram(program).ToListAsync();
+      var methods = Main.GetTestMethodsForProgram(program).ToList();
       Assert.AreEqual(3, methods.Count);
       Assert.IsTrue(methods.All(m =>
         m.MethodName == "SimpleTest.compareToZero"));
@@ -44,7 +43,7 @@ class SimpleTest {
     }
 
     [TestMethod]
-    public async Task Bools() {
+    public void Bools() {
       var source = @"
 class SimpleTest {
   static method checkIfTrue(b: bool) returns (ret: bool) {
@@ -56,7 +55,7 @@ class SimpleTest {
 }
 ".TrimStart();
       var program = Utils.Parse(source);
-      var methods = await Main.GetTestMethodsForProgram(program).ToListAsync();
+      var methods = Main.GetTestMethodsForProgram(program).ToList();
       Assert.AreEqual(2, methods.Count);
       Assert.IsTrue(methods.All(m => m.MethodName == "SimpleTest.checkIfTrue"));
       Assert.IsTrue(methods.All(m =>
@@ -68,7 +67,7 @@ class SimpleTest {
     }
 
     [TestMethod]
-    public async Task Reals() {
+    public void Reals() {
       var source = @"
 class SimpleTest {
   static method compareToZero(r: real) returns (ret: int) {
@@ -90,7 +89,7 @@ class SimpleTest {
 }
 ".TrimStart();
       var program = Utils.Parse(source);
-      var methods = await Main.GetTestMethodsForProgram(program).ToListAsync();
+      var methods = Main.GetTestMethodsForProgram(program).ToList();
       Assert.AreEqual(7, methods.Count);
       Assert.IsTrue(
         methods.All(m => m.MethodName == "SimpleTest.compareToZero"));
@@ -108,7 +107,7 @@ class SimpleTest {
     }
 
     [TestMethod]
-    public async Task BitVectors() {
+    public void BitVectors() {
       var source = @"
 class SimpleTest {
   static method compareToBase(r: bv10) returns (ret: int) {
@@ -123,7 +122,7 @@ class SimpleTest {
 }
 ".TrimStart();
       var program = Utils.Parse(source);
-      var methods = await Main.GetTestMethodsForProgram(program).ToListAsync();
+      var methods = Main.GetTestMethodsForProgram(program).ToList();
       Assert.AreEqual(3, methods.Count);
       Assert.IsTrue(
         methods.All(m => m.MethodName == "SimpleTest.compareToBase"));
@@ -139,7 +138,7 @@ class SimpleTest {
     }
 
     [TestMethod]
-    public async Task Chars() {
+    public void Chars() {
       var source = @"
 class SimpleTest {
   static method compareToB(c: char) returns (ret: int) {
@@ -154,7 +153,7 @@ class SimpleTest {
 }
 ".TrimStart();
       var program = Utils.Parse(source);
-      var methods = await Main.GetTestMethodsForProgram(program).ToListAsync();
+      var methods = Main.GetTestMethodsForProgram(program).ToList();
       Assert.AreEqual(3, methods.Count);
       Assert.IsTrue(methods.All(m => m.MethodName == "SimpleTest.compareToB"));
       Assert.IsTrue(methods.All(m =>
@@ -169,7 +168,7 @@ class SimpleTest {
     }
 
     [TestMethod]
-    public async Task CharsUnspecified() {
+    public void CharsUnspecified() {
       // This test case is different from the one above because the model would
       // not specify the exact value of c when the only constraint on it is that
       // c != 'B"
@@ -185,7 +184,7 @@ class SimpleTest {
 }
 ".TrimStart();
       var program = Utils.Parse(source);
-      var methods = await Main.GetTestMethodsForProgram(program).ToListAsync();
+      var methods = Main.GetTestMethodsForProgram(program).ToList();
       Assert.AreEqual(2, methods.Count);
       Assert.IsTrue(methods.All(m => m.MethodName == "SimpleTest.compareToB"));
       Assert.IsTrue(methods.All(m =>

@@ -406,10 +406,6 @@ public abstract class DafnySequence<T> implements Iterable<T> {
         return builder.toString();
     }
 
-    public Iterable<T> Elements() {
-        return this;
-    }
-
     public HashSet<T> UniqueElements() {
         return new HashSet<>(asList());
     }

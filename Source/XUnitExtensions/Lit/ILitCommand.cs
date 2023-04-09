@@ -36,9 +36,9 @@ namespace XUnitExtensions.Lit {
       var hasGlobCharacters = false;
       for (int i = 0; i < line.Length; i++) {
         var c = line[i];
-        if (c == '\'' && !doubleQuoted) {
+        if (c == '\'') {
           singleQuoted = !singleQuoted;
-        } else if (c == '"' && !singleQuoted) {
+        } else if (c == '"') {
           doubleQuoted = !doubleQuoted;
         } else if (Char.IsWhiteSpace(c) && !(singleQuoted || doubleQuoted)) {
           if (argument.Length != 0) {
@@ -77,6 +77,6 @@ namespace XUnitExtensions.Lit {
       return result.Files.Select(f => f.Path);
     }
 
-    public (int, string, string) Execute(ITestOutputHelper? outputHelper, TextReader? inputReader, TextWriter? outputWriter, TextWriter? errorWriter);
+    public (int, string, string) Execute(ITestOutputHelper outputHelper, TextReader? inputReader, TextWriter? outputWriter, TextWriter? errorWriter);
   }
 }

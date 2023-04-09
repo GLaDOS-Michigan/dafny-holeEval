@@ -7,6 +7,7 @@ using System.Linq;
 using System.Runtime.Serialization;
 using Microsoft.Dafny;
 using Type = Microsoft.Dafny.Type;
+using Microsoft.Boogie;
 using Function = Microsoft.Dafny.Function;
 using Program = Microsoft.Dafny.Program;
 
@@ -100,8 +101,8 @@ namespace DafnyServer {
         };
         if (fs.Type is UserDefinedType) {
           var userType = fs.Type as UserDefinedType;
-          fieldSymbol.ReferencedClass = userType.ResolvedClass.SanitizedName;
-          fieldSymbol.ReferencedModule = userType.ResolvedClass.EnclosingModuleDefinition.SanitizedName;
+          fieldSymbol.ReferencedClass = userType.ResolvedClass.CompileName;
+          fieldSymbol.ReferencedModule = userType.ResolvedClass.EnclosingModuleDefinition.CompileName;
         }
         information.Add(fieldSymbol);
       }
@@ -152,8 +153,8 @@ namespace DafnyServer {
                 var name = declarationLocal.Name;
                 information.Add(new SymbolInformation {
                   Name = name,
-                  ParentClass = userType.ResolvedClass.SanitizedName,
-                  Module = userType.ResolvedClass.EnclosingModuleDefinition.SanitizedName,
+                  ParentClass = userType.ResolvedClass.CompileName,
+                  Module = userType.ResolvedClass.EnclosingModuleDefinition.CompileName,
                   SymbolType = SymbolInformation.Type.Definition,
                   StartToken = method.BodyStartTok,
                   EndToken = method.BodyEndTok
@@ -213,9 +214,9 @@ namespace DafnyServer {
         var userType = (UserDefinedType)callStmt.Receiver.Type;
         var reveiverName = receiver == null ? "" : receiver.Name;
         information.Add(new SymbolInformation {
-          Name = callStmt.Method.SanitizedName,
-          ParentClass = userType.ResolvedClass.SanitizedName,
-          Module = userType.ResolvedClass.EnclosingModuleDefinition.SanitizedName,
+          Name = callStmt.Method.CompileName,
+          ParentClass = userType.ResolvedClass.CompileName,
+          Module = userType.ResolvedClass.EnclosingModuleDefinition.CompileName,
           Call = reveiverName + "." + callStmt.MethodSelect.Member,
           SymbolType = SymbolInformation.Type.Call,
           StartToken = callStmt.MethodSelect.tok
@@ -240,8 +241,8 @@ namespace DafnyServer {
         var designator = segment == null ? "" : segment.Name;
         information.Add(new SymbolInformation {
           Name = exprDotName.SuffixName,
-          ParentClass = type.ResolvedClass.SanitizedName,
-          Module = type.ResolvedClass.EnclosingModuleDefinition.SanitizedName,
+          ParentClass = type.ResolvedClass.CompileName,
+          Module = type.ResolvedClass.EnclosingModuleDefinition.CompileName,
           Call = designator + "." + exprDotName.SuffixName,
           SymbolType = SymbolInformation.Type.Call,
           StartToken = exprDotName.tok
@@ -318,8 +319,8 @@ namespace DafnyServer {
           foreach (var exprDotName in allExprDotNames) {
             if (exprDotName.Lhs.Type is UserDefinedType) {
               var type = (UserDefinedType)exprDotName.Lhs.Type;
-              if (fieldName == exprDotName.SuffixName && className == type.ResolvedClass.SanitizedName &&
-                  moduleName == type.ResolvedClass.EnclosingModuleDefinition.SanitizedName) {
+              if (fieldName == exprDotName.SuffixName && className == type.ResolvedClass.CompileName &&
+                  moduleName == type.ResolvedClass.EnclosingModuleDefinition.CompileName) {
                 information.Add(new ReferenceInformation {
                   MethodName = exprDotName.SuffixName,
                   StartToken = exprDotName.tok,
@@ -334,8 +335,8 @@ namespace DafnyServer {
             if (nameSegment.ResolvedExpression is MemberSelectExpr) {
               var memberAcc = (MemberSelectExpr)nameSegment.ResolvedExpression;
               if (fieldName == memberAcc.MemberName &&
-                  className == memberAcc.Member.EnclosingClass.SanitizedName &&
-                  moduleName == memberAcc.Member.EnclosingClass.EnclosingModuleDefinition.SanitizedName) {
+                  className == memberAcc.Member.EnclosingClass.CompileName &&
+                  moduleName == memberAcc.Member.EnclosingClass.EnclosingModuleDefinition.CompileName) {
                 information.Add(new ReferenceInformation {
                   MethodName = memberAcc.MemberName,
                   StartToken = memberAcc.tok,

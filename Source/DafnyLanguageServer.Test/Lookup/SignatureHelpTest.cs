@@ -5,11 +5,24 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.Dafny.LanguageServer.IntegrationTest.Util;
 
 namespace Microsoft.Dafny.LanguageServer.IntegrationTest.Lookup {
   [TestClass]
-  public class SignatureHelpTest : ClientBasedLanguageServerTest {
+  public class SignatureHelpTest : DafnyLanguageServerTestBase {
+    // At this time, the main logic happens within ISymbolGuesser since we have to primarily work
+    // with migrated symbol tables. Therefore, we apply modifications prior requesting signature help
+    // just like a user would do.
+    private ILanguageClient client;
+
+    private void ApplyChanges(TextDocumentItem documentItem, params TextDocumentContentChangeEvent[] changes) {
+      client.DidChangeTextDocument(new DidChangeTextDocumentParams {
+        TextDocument = new OptionalVersionedTextDocumentIdentifier {
+          Uri = documentItem.Uri,
+          Version = documentItem.Version + 1
+        },
+        ContentChanges = changes
+      });
+    }
 
     private Task<SignatureHelp> RequestSignatureHelpAsync(TextDocumentItem documentItem, Position position) {
       // TODO at this time we do not set the context since it appears that's also the case when used within VSCode.
@@ -20,6 +33,11 @@ namespace Microsoft.Dafny.LanguageServer.IntegrationTest.Lookup {
         },
         CancellationToken
       );
+    }
+
+    [TestInitialize]
+    public async Task SetUp() {
+      client = await InitializeClient();
     }
 
     [TestMethod]
@@ -43,10 +61,12 @@ method Main() {
 }".TrimStart();
       var documentItem = CreateTestDocument(source);
       await client.OpenDocumentAndWaitAsync(documentItem, CancellationToken);
-      ApplyChange(
-        ref documentItem,
-          new Range((7, 2), (7, 2)),
-          "Multiply("
+      ApplyChanges(
+        documentItem,
+        new TextDocumentContentChangeEvent {
+          Range = new Range((7, 2), (7, 2)),
+          Text = "Multiply("
+        }
       );
 
       var signatureHelp = await RequestSignatureHelpAsync(documentItem, (7, 11));
@@ -70,10 +90,12 @@ method Main() {
 }".TrimStart();
       var documentItem = CreateTestDocument(source);
       await client.OpenDocumentAndWaitAsync(documentItem, CancellationToken);
-      ApplyChange(
-        ref documentItem,
-          new Range((6, 2), (6, 2)),
-          "Multiply("
+      ApplyChanges(
+        documentItem,
+        new TextDocumentContentChangeEvent {
+          Range = new Range((6, 2), (6, 2)),
+          Text = "Multiply("
+        }
       );
 
       var signatureHelp = await RequestSignatureHelpAsync(documentItem, (6, 11));
@@ -92,10 +114,12 @@ method Main() {
 }".TrimStart();
       var documentItem = CreateTestDocument(source);
       await client.OpenDocumentAndWaitAsync(documentItem, CancellationToken);
-      ApplyChange(
-        ref documentItem,
-          new Range((1, 2), (1, 2)),
-          "Multiply("
+      ApplyChanges(
+        documentItem,
+        new TextDocumentContentChangeEvent {
+          Range = new Range((1, 2), (1, 2)),
+          Text = "Multiply("
+        }
       );
 
       var signatureHelp = await RequestSignatureHelpAsync(documentItem, (1, 11));
@@ -131,10 +155,12 @@ module Mod {
 }".TrimStart();
       var documentItem = CreateTestDocument(source);
       await client.OpenDocumentAndWaitAsync(documentItem, CancellationToken);
-      ApplyChange(
-        ref documentItem,
-          new Range((20, 6), (20, 6)),
-          "Multiply("
+      ApplyChanges(
+        documentItem,
+        new TextDocumentContentChangeEvent {
+          Range = new Range((20, 6), (20, 6)),
+          Text = "Multiply("
+        }
       );
 
       var signatureHelp = await RequestSignatureHelpAsync(documentItem, (20, 15));
@@ -178,10 +204,12 @@ class B {
 }".TrimStart();
       var documentItem = CreateTestDocument(source);
       await client.OpenDocumentAndWaitAsync(documentItem, CancellationToken);
-      ApplyChange(
-        ref documentItem,
-          new Range((25, 4), (25, 4)),
-          "a.Multiply("
+      ApplyChanges(
+        documentItem,
+        new TextDocumentContentChangeEvent {
+          Range = new Range((25, 4), (25, 4)),
+          Text = "a.Multiply("
+        }
       );
 
       var signatureHelp = await RequestSignatureHelpAsync(documentItem, (25, 15));

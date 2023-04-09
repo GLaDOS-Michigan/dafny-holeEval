@@ -6,13 +6,11 @@ using System.Linq;
 using JetBrains.Annotations;
 
 namespace Microsoft.Dafny {
-  public enum BlockStyle {
+  public enum BraceStyle {
     Nothing,
     Space,
     Newline,
-    Brace,
-    SpaceBrace,
-    NewlineBrace
+    NewlineNoBrace
   }
 
   public class ConcreteSyntaxTree : ICanRender {
@@ -30,12 +28,6 @@ namespace Microsoft.Dafny {
       var result = new ConcreteSyntaxTree(relativeIndent);
       _nodes.Add(result);
       return result;
-    }
-
-    public void Clear() {
-      while (_nodes.Any()) {
-        _nodes.RemoveAt(0);
-      }
     }
 
     public T Prepend<T>(T node)
@@ -133,8 +125,8 @@ namespace Microsoft.Dafny {
     }
 
     public ConcreteSyntaxTree NewBlock(string header = "", string footer = "",
-      BlockStyle open = BlockStyle.SpaceBrace,
-      BlockStyle close = BlockStyle.NewlineBrace) {
+      BraceStyle open = BraceStyle.Space,
+      BraceStyle close = BraceStyle.Newline) {
       Contract.Requires(header != null);
       Append(ConcreteSyntaxTreeUtils.Block(out ConcreteSyntaxTree result, header: header, footer: footer, open: open,
         close: close));
@@ -154,7 +146,7 @@ namespace Microsoft.Dafny {
     }
 
     public ConcreteSyntaxTree NewBigExprBlock(string header = "", string /*?*/ footer = "") {
-      return NewBlock(header, footer, BlockStyle.SpaceBrace, BlockStyle.Brace);
+      return NewBlock(header, footer, BraceStyle.Space, BraceStyle.Nothing);
     }
 
     public ConcreteSyntaxTree NewFile(string filename) {
@@ -178,9 +170,10 @@ namespace Microsoft.Dafny {
       return sw.ToString();
     }
 
-    public void Render(TextWriter writer, int indentation, WriterState writerState, Queue<FileSyntax> files, int indentSize = 2) {
+    public void Render(TextWriter writer, int indentation, WriterState writerState,
+      Queue<FileSyntax> files) {
       foreach (var node in _nodes) {
-        node.Render(writer, indentation + RelativeIndentLevel * indentSize, writerState, files, indentSize);
+        node.Render(writer, indentation + RelativeIndentLevel * 2, writerState, files);
       }
     }
   }

@@ -1,9 +1,6 @@
-using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.Boogie;
 using Microsoft.Dafny;
 using Xunit;
@@ -149,15 +146,14 @@ module SomeModule {
 
     [Fact]
     public void NoUniqueLinesWhenConcatenatingUnrelatedPrograms() {
-      var options = DafnyOptions.Create();
-      DafnyOptions.Install(options);
+      DafnyOptions.Install(new DafnyOptions());
 
       var regularBoogie = GetBoogie(originalProgram).ToList();
       var renamedBoogie = GetBoogie(renamedProgram).ToList();
-      var regularBoogieText = GetBoogieText(options, regularBoogie);
-      var renamedBoogieText = GetBoogieText(options, renamedBoogie);
+      var regularBoogieText = GetBoogieText(regularBoogie);
+      var renamedBoogieText = GetBoogieText(renamedBoogie);
       var separate = UniqueNonCommentLines(regularBoogieText + renamedBoogieText);
-      var combinedBoogie = GetBoogieText(options, GetBoogie(originalProgram + renamedProgram));
+      var combinedBoogie = GetBoogieText(GetBoogie(originalProgram + renamedProgram));
       var together = UniqueNonCommentLines(combinedBoogie);
 
       var uniqueLines = separate.Union(together).Except(separate.Intersect(together)).ToList();
@@ -165,60 +161,61 @@ module SomeModule {
     }
 
     [Fact]
-    public async void EqualProverLogWhenReorderingProgram() {
-      var options = DafnyOptions.Create();
-      options.ProcsToCheck.Add("SomeMethod*");
-      DafnyOptions.Install(options);
+    public void EqualProverLogWhenReorderingProgram() {
+      DafnyOptions.Install(new DafnyOptions());
+      CommandLineOptions.Clo.Parse(new[] { "" });
+      CommandLineOptions.Clo.ProcsToCheck.Add("*SomeMethod");
+      ExecutionEngine.printer = new ConsolePrinter(); // For boogie errors
 
-      var reorderedProverLog = await GetProverLogForProgram(options, GetBoogie(reorderedProgram));
-      var regularProverLog = await GetProverLogForProgram(options, GetBoogie(originalProgram));
+      var reorderedProverLog = GetProverLogForProgram(GetBoogie(reorderedProgram));
+      var regularProverLog = GetProverLogForProgram(GetBoogie(originalProgram));
       Assert.Equal(regularProverLog, reorderedProverLog);
     }
 
     [Fact]
-    public async void EqualProverLogWhenRenamingProgram() {
-      var options = DafnyOptions.Create();
-      options.ProcsToCheck.Add("*SomeMethod*");
-      DafnyOptions.Install(options);
+    public void EqualProverLogWhenRenamingProgram() {
 
-      var renamedProverLog = await GetProverLogForProgram(options, GetBoogie(renamedProgram));
-      var regularProverLog = await GetProverLogForProgram(options, GetBoogie(originalProgram));
+      DafnyOptions.Install(new DafnyOptions());
+      CommandLineOptions.Clo.Parse(new[] { "" });
+      CommandLineOptions.Clo.ProcsToCheck.Add("*SomeMethod*");
+      ExecutionEngine.printer = new ConsolePrinter(); // For boogie errors
+
+      var renamedProverLog = GetProverLogForProgram(GetBoogie(renamedProgram));
+      var regularProverLog = GetProverLogForProgram(GetBoogie(originalProgram));
       Assert.Equal(regularProverLog, renamedProverLog);
     }
 
     [Fact]
-    public async void EqualProverLogWhenAddingUnrelatedProgram() {
+    public void EqualProverLogWhenAddingUnrelatedProgram() {
 
-      var options = DafnyOptions.Create();
-      options.ProcsToCheck.Add("*SomeMethod *");
-      DafnyOptions.Install(options);
+      DafnyOptions.Install(new DafnyOptions());
+      CommandLineOptions.Clo.Parse(new[] { "" });
+      CommandLineOptions.Clo.ProcsToCheck.Add("*SomeMethod");
+      ExecutionEngine.printer = new ConsolePrinter(); // For boogie errors
 
-      var renamedProverLog = await GetProverLogForProgram(options, GetBoogie(renamedProgram + originalProgram));
-      var regularProverLog = await GetProverLogForProgram(options, GetBoogie(originalProgram));
+      var renamedProverLog = GetProverLogForProgram(GetBoogie(renamedProgram + originalProgram));
+      var regularProverLog = GetProverLogForProgram(GetBoogie(originalProgram));
       Assert.Equal(regularProverLog, renamedProverLog);
     }
 
-    private async Task<string> GetProverLogForProgram(ExecutionEngineOptions options, IEnumerable<Microsoft.Boogie.Program> boogiePrograms) {
-      var logs = await GetProverLogsForProgram(options, boogiePrograms).ToListAsync();
+    private string GetProverLogForProgram(IEnumerable<Microsoft.Boogie.Program> boogiePrograms) {
+      var logs = GetProverLogsForProgram(boogiePrograms).ToList();
       Assert.Single(logs);
       return logs[0];
     }
 
-    private async IAsyncEnumerable<string> GetProverLogsForProgram(ExecutionEngineOptions options,
-      IEnumerable<BoogieProgram> boogiePrograms) {
+    private IEnumerable<string> GetProverLogsForProgram(IEnumerable<Microsoft.Boogie.Program> boogiePrograms) {
       string directory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
       Directory.CreateDirectory(directory);
       var temp1 = directory + "/proverLog";
       testOutputHelper.WriteLine("proverLog: " + temp1);
-      options.ProverLogFilePath = temp1;
-      using (var engine = ExecutionEngine.CreateWithoutSharedCache(options)) {
-        foreach (var boogieProgram in boogiePrograms) {
-          var (outcome, _) = await Main.BoogieOnce(Console.Out, engine, "", "", boogieProgram, "programId");
-          testOutputHelper.WriteLine("outcome: " + outcome);
+      CommandLineOptions.Clo.ProverLogFilePath = temp1;
+      foreach (var boogieProgram in boogiePrograms) {
+        Main.BoogieOnce("", "", boogieProgram, "programId", out _, out var outcome);
+        testOutputHelper.WriteLine("outcome: " + outcome);
+        foreach (var proverFile in Directory.GetFiles(directory)) {
+          yield return File.ReadAllText(proverFile);
         }
-      }
-      foreach (var proverFile in Directory.GetFiles(directory)) {
-        yield return await File.ReadAllTextAsync(proverFile);
       }
     }
 
@@ -226,15 +223,15 @@ module SomeModule {
       return input.Split('\n').Where(line => !line.TrimStart().StartsWith("//")).ToHashSet();
     }
 
-    string PrintBoogie(CoreOptions options, BoogieProgram program) {
+    string PrintBoogie(BoogieProgram program) {
       var result = new StringWriter();
-      var writer = new TokenTextWriter(result, options);
+      var writer = new TokenTextWriter(result);
       program.Emit(writer);
       return result.ToString();
     }
 
-    string GetBoogieText(CoreOptions options, IEnumerable<BoogieProgram> boogieProgram) {
-      return string.Join('\n', boogieProgram.Select(x => PrintBoogie(options, x)));
+    string GetBoogieText(IEnumerable<BoogieProgram> boogieProgram) {
+      return string.Join('\n', boogieProgram.Select(PrintBoogie));
     }
 
     IEnumerable<BoogieProgram> GetBoogie(string dafnyProgramText) {

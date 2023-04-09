@@ -1,5 +1,4 @@
-﻿using System;
-using Microsoft.Boogie;
+﻿using Microsoft.Boogie;
 
 namespace Microsoft.Dafny.LanguageServer.Workspace {
   /// <summary>
@@ -16,16 +15,8 @@ namespace Microsoft.Dafny.LanguageServer.Workspace {
     /// </summary>
     public AutoVerification Verify { get; set; } = AutoVerification.OnChange;
 
-    static DocumentOptions() {
-      DafnyOptions.Install(DafnyOptions.Create());
-      DafnyOptions.O.ApplyDefaultOptions();
-      DafnyOptions.O.PrintIncludesMode = DafnyOptions.IncludesModes.None;
-      // ShowSnippets == true enable boogie assertion's token to contain the range of expressions, not their single token
-      DafnyOptions.O.ShowSnippets = true;
-    }
-
-    public string ProverOptions =>
-      string.Join(" ", DafnyOptions.O.ProverOptions) +
+    public string ProverOptions { get; set; } =
+      string.Join(" ", CommandLineOptions.Clo.ProverOptions) +
       " O:model_compress=false" + " O:model.completion=true" +
       " O:model_evaluator.completion=true";
   }
