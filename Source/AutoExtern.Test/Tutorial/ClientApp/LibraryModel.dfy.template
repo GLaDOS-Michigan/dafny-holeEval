@@ -1,9 +1,0 @@
-/// # C#/Dafny interop: Dafny model template (filled by AutoExtern from ../Library/Library.cs)
-
-include "CSharpModel.dfy"
-
-module {:compile false} {:extern "Library"} Library {
-  import opened System
-
-{{{AutoExtern}}}
-}
