@@ -110,7 +110,7 @@ namespace Microsoft.Dafny {
 
     private static void EraseFromBlockStmt(BlockStmt blockStmt, int line) {
       for(int i = 0; i < blockStmt.Body.Count; i++) {
-        if (blockStmt.Body[i].Tok.line <= line) {
+        if (blockStmt.Body[i].Tok.line <= line && line <= blockStmt.Body[i].EndTok.line) {
           if (EraseFromStatement(blockStmt.Body[i], line)) {
             blockStmt.Body.RemoveAt(i);
           }
