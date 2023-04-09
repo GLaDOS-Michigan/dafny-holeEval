@@ -495,7 +495,7 @@ namespace Microsoft.Dafny {
 
       includeParser = new IncludeParser(program);
       Console.WriteLine(Printer.StatementToString(baseLemma.Body));
-      var filename = includeParser.Normalized(baseLemma.BodyStartTok.Filename);
+      var filename = includeParser.Normalized(baseLemma.BodyStartTok.filename);
       dafnyVerifier.InitializeBaseFoldersInRemoteServers(program, includeParser.commonPrefix);
 
       UnderscoreStr = RandomString(8);
@@ -642,11 +642,11 @@ namespace Microsoft.Dafny {
       // empty expression list should represent the original code without any additions
       Console.WriteLine($"{dafnyVerifier.sw.ElapsedMilliseconds / 1000}:: start generatinng expressions and lemmas");
       workingLemma = desiredLemma;
-      workingLemmaCode = File.ReadAllLines(workingLemma.BodyStartTok.Filename);
+      workingLemmaCode = File.ReadAllLines(workingLemma.BodyStartTok.filename);
       mergedCode.Add(String.Join('\n', workingLemmaCode.Take(workingLemma.tok.line - 1)));
       // placeholder for workingLemma
       mergedCode.Add("");
-      mergedCode.Add(String.Join('\n', workingLemmaCode.Skip(workingLemma.EndToken.line)));
+      mergedCode.Add(String.Join('\n', workingLemmaCode.Skip(workingLemma.BodyEndTok.line)));
 
       PrintExprAndCreateProcess(program, new List<ExprStmtUnion>(), 0);
       int cnt = 1;
@@ -780,7 +780,7 @@ namespace Microsoft.Dafny {
         }
       }
 
-      var changingFilePath = includeParser.Normalized(workingLemma.BodyStartTok.Filename);
+      var changingFilePath = includeParser.Normalized(workingLemma.BodyStartTok.filename);
       // var remoteFolderPath = dafnyVerifier.DuplicateAllFiles(cnt, changingFilePath);
 
       // add new statements to the beginning of working lemma

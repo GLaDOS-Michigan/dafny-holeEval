@@ -77,7 +77,7 @@ namespace Microsoft.Dafny {
                   List<Expression> lhss = new List<Expression>();
                   List<AssignmentRhs> rhss = new List<AssignmentRhs>();
                   // lhss.Add(new IdentifierExpr(member.tok, $"temp_{cnt}_${i}"));
-                  rhss.Add(new ExprRhs(new ApplySuffix(member.tok, null, new NameSegment(member.tok, $"reveal_{member.ToString()}", new List<Type>()), new List<ActualBinding>(), member.tok)));
+                  rhss.Add(new ExprRhs(new ApplySuffix(member.tok, null, new NameSegment(member.tok, $"reveal_{member.ToString()}", new List<Type>()), new List<ActualBinding>())));
                   UpdateStmt updateStmt = new UpdateStmt(member.tok, member.tok, lhss, rhss);
                   result.Add(new ExpressionFinder.StatementDepth(updateStmt, 1));
                   Console.WriteLine(Printer.StatementToString(updateStmt));

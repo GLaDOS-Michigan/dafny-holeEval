@@ -552,14 +552,14 @@ namespace Microsoft.Dafny {
 
         case "holeEvalDepth":
           int depth = 0;
-          if (ps.GetIntArgument(ref depth, 4)) {
+          if (ps.GetNumericArgument(ref depth, 4)) {
             HoleEvaluatorDepth = depth;
           }
           return true;
 
         case "holeEvalExpressionDepth":
           int exprDepth = 0;
-          if (ps.GetIntArgument(ref exprDepth)) {
+          if (ps.GetNumericArgument(ref exprDepth)) {
             HoleEvaluatorExpressionDepth = exprDepth;
           }
           return true;
@@ -596,7 +596,7 @@ namespace Microsoft.Dafny {
 
         case "proofEvalInsertionPoint":
           int insertionPoint = 0;
-          if (ps.GetIntArgument(ref insertionPoint)) {
+          if (ps.GetNumericArgument(ref insertionPoint)) {
             ProofEvaluatorInsertionPoint = insertionPoint;
           }
           return true;

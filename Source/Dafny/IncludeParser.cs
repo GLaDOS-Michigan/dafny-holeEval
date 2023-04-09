@@ -51,15 +51,15 @@ namespace Microsoft.Dafny {
         return;
       }
       foreach (var file in program.DefaultModuleDef.Includes) {
-        samples.Add(file.CanonicalPath);
+        samples.Add(file.canonicalPath);
       }
       commonPrefix = new string(
         samples.First().Substring(0, samples.Min(s => s.Length))
         .TakeWhile((c, i) => samples.All(s => s[i] == c)).ToArray());
       commonPrefixLength = commonPrefix.Length;
       foreach (var includePair in program.DefaultModuleDef.Includes) {
-        var includedFilename = Normalized(includePair.IncludedFilename);
-        var includerFilename = Normalized(includePair.IncluderFilename);
+        var includedFilename = Normalized(includePair.includedFilename);
+        var includerFilename = Normalized(includePair.includerFilename);
         if (!affectedFilesList.ContainsKey(includedFilename)) {
           affectedFilesList.Add(includedFilename, new List<string>());
         }

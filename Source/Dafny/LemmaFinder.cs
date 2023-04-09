@@ -106,7 +106,7 @@ namespace Microsoft.Dafny {
         foreach (var arg in arguments) {
           bindings.Add(new ActualBinding(null, arg));
         }
-        var lemmaCallExpr = new ApplySuffix(lemma.tok, null, new NameSegment(lemma.tok, lemma.Name, new List<Type>()), bindings, lemma.tok);
+        var lemmaCallExpr = new ApplySuffix(lemma.tok, null, new NameSegment(lemma.tok, lemma.Name, new List<Type>()), bindings);
         yield return new ExpressionFinder.ExpressionDepth(lemmaCallExpr, currentMaxDepth);
         yield break;
       }

@@ -443,7 +443,7 @@ namespace Microsoft.Dafny {
       desiredFunction = GetFunction(program, funcName);
       if (desiredFunction != null) {
         includeParser = new IncludeParser(program);
-        var filename = includeParser.Normalized(desiredFunction.BodyStartTok.Filename);
+        var filename = includeParser.Normalized(desiredFunction.BodyStartTok.filename);
         foreach (var file in includeParser.GetListOfAffectedFilesBy(filename)) {
           affectedFiles.Add(file);
         }
@@ -501,14 +501,14 @@ namespace Microsoft.Dafny {
 
       workingFunc = desiredFunctionUnresolved;
       workingConstraintFunc = constraintFunc;
-      workingFuncCode = File.ReadAllLines(workingFunc.BodyStartTok.Filename);
+      workingFuncCode = File.ReadAllLines(workingFunc.BodyStartTok.filename);
       mergedCode.Add(String.Join('\n', workingFuncCode.Take(workingFunc.tok.line - 1)));
       // placeholder for workingLemma
       mergedCode.Add("");
-      mergedCode.Add(String.Join('\n', workingFuncCode.Skip(workingFunc.EndToken.line)));
+      mergedCode.Add(String.Join('\n', workingFuncCode.Skip(workingFunc.BodyEndTok.line)));
 
-      if (constraintFunc != null && constraintFunc.BodyStartTok.Filename != workingFunc.BodyStartTok.Filename) {
-        constraintFuncCode = File.ReadAllText(constraintFunc.BodyStartTok.Filename);
+      if (constraintFunc != null && constraintFunc.BodyStartTok.filename != workingFunc.BodyStartTok.filename) {
+        constraintFuncCode = File.ReadAllText(constraintFunc.BodyStartTok.filename);
         constraintFuncLineCount = constraintFuncCode.Count(f => (f == '\n'));
       }
       
@@ -808,11 +808,11 @@ namespace Microsoft.Dafny {
       System.IO.Directory.CreateDirectory(Path.GetDirectoryName($"{workingDir}/{samples[0]}"));
       File.Copy(program.FullName, $"{workingDir}/{samples[0]}", true);
       foreach (var file in program.DefaultModuleDef.Includes) {
-        samples.Add(includeParser.Normalized(file.CanonicalPath));
+        samples.Add(includeParser.Normalized(file.canonicalPath));
       }
       for (int i = 1; i < samples.Count; i++) {
         System.IO.Directory.CreateDirectory(Path.GetDirectoryName($"{workingDir}/{samples[i]}"));
-        File.Copy(program.DefaultModuleDef.Includes[i - 1].CanonicalPath, $"{workingDir}/{samples[i]}", true);
+        File.Copy(program.DefaultModuleDef.Includes[i - 1].canonicalPath, $"{workingDir}/{samples[i]}", true);
       }
     }
 
@@ -866,8 +866,8 @@ namespace Microsoft.Dafny {
         dafnyVerifier.runDafny(code, args,
             exprDepth, cnt, lemmaForExprValidityPosition, lemmaForExprValidityStartPosition, "");
       } else {
-        var changingFilePath = includeParser.Normalized(workingFunc.BodyStartTok.Filename);
-        var constraintFuncChangingFilePath = includeParser.Normalized(workingConstraintFunc.BodyStartTok.Filename);
+        var changingFilePath = includeParser.Normalized(workingFunc.BodyStartTok.filename);
+        var constraintFuncChangingFilePath = includeParser.Normalized(workingConstraintFunc.BodyStartTok.filename);
         var remoteFolderPath = dafnyVerifier.DuplicateAllFiles(cnt, changingFilePath);
 
         var clonedWorkingFunc = cloner.CloneFunction(workingFunc);

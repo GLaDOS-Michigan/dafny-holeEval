@@ -10,9 +10,11 @@
 //       - main program for taking a Dafny program and verifying it
 //---------------------------------------------------------------------------------------------
 
+using System.Collections.Concurrent;
 using DafnyServer.CounterexampleGeneration;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 
 namespace Microsoft.Dafny {
   using System;
@@ -52,7 +54,7 @@ namespace Microsoft.Dafny {
       ExitValue exitValue;
       switch (cliArgumentsResult) {
         case CommandLineArgumentsResult.OK:
-          exitValue = ProcessFiles(dafnyFiles, otherFiles.AsReadOnly(), reporter);
+          exitValue = ProcessFiles(dafnyFiles, otherFiles.AsReadOnly(), reporter).Result;
           break;
         case CommandLineArgumentsResult.PREPROCESSING_ERROR:
           exitValue = ExitValue.PREPROCESSING_ERROR;
@@ -235,7 +237,7 @@ namespace Microsoft.Dafny {
       return CommandLineArgumentsResult.OK;
     }
 
-    static ExitValue ProcessFiles(IList<DafnyFile/*!*/>/*!*/ dafnyFiles, ReadOnlyCollection<string> otherFileNames,
+    static async Task<ExitValue> ProcessFiles(IList<DafnyFile/*!*/>/*!*/ dafnyFiles, ReadOnlyCollection<string> otherFileNames,
                                   ErrorReporter reporter, bool lookForSnapshots = true, string programId = null) {
       Contract.Requires(cce.NonNullElements(dafnyFiles));
       var dafnyFileNames = DafnyFile.fileNames(dafnyFiles);
@@ -260,7 +262,7 @@ namespace Microsoft.Dafny {
         foreach (var f in dafnyFiles) {
           Console.WriteLine();
           Console.WriteLine("-------------------- {0} --------------------", f);
-          var ev = ProcessFiles(new List<DafnyFile> { f }, new List<string>().AsReadOnly(), reporter, lookForSnapshots, f.FilePath);
+          var ev = ProcessFiles(new List<DafnyFile> { f }, new List<string>().AsReadOnly(), reporter, lookForSnapshots, f.FilePath).Result;
           if (exitValue != ev && ev != ExitValue.SUCCESS) {
             exitValue = ev;
           }
@@ -275,7 +277,7 @@ namespace Microsoft.Dafny {
           foreach (var f in s) {
             snapshots.Add(new DafnyFile(f));
           }
-          var ev = ProcessFiles(snapshots, new List<string>().AsReadOnly(), reporter, false, programId);
+          var ev = ProcessFiles(snapshots, new List<string>().AsReadOnly(), reporter, false, programId).Result;
           if (exitValue != ev && ev != ExitValue.SUCCESS) {
             exitValue = ev;
           }
@@ -283,7 +285,6 @@ namespace Microsoft.Dafny {
         return exitValue;
       }
 
-      Dafny.Program dafnyProgram;
       string programName = dafnyFileNames.Count == 1 ? dafnyFileNames[0] : "the_program";
       string err = Dafny.Main.ParseCheck(dafnyFiles, programName, reporter, out var dafnyProgram);
       Dafny.Main.Parse(dafnyFiles, programName, reporter, out var dafnyUnresolvedProgram);
