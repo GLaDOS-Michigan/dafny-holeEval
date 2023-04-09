@@ -73,6 +73,21 @@ namespace Microsoft.Dafny {
       Console.WriteLine($"result.size = {result.Count}");
       return result;
     }
+    public static Type SubstituteTypeWithSynonyms(Type t) {
+      if (t.AsTypeSynonym != null) {
+        return SubstituteTypeWithSynonyms(t.AsTypeSynonym.Rhs);
+      }
+      else if (t is UserDefinedType) {
+        var udt = (UserDefinedType)t;
+        for (int i = 0; i < udt.TypeArgs.Count; i++) {
+          var changedType = SubstituteTypeWithSynonyms(udt.TypeArgs[i]);
+          if (changedType != udt.TypeArgs[i]) {
+            udt.TypeArgs[i] = changedType;
+          }
+        }
+      }
+      return t;
+    }
     public IEnumerable<ExpressionFinder.ExpressionDepth> ListInvocations(
         Lemma lemma,
         Dictionary<string, List<ExpressionFinder.ExpressionDepth>> typeToExpressionDict,
@@ -105,6 +120,7 @@ namespace Microsoft.Dafny {
           t = Resolver.SubstType(t, subst);
         }
       }
+      t = SubstituteTypeWithSynonyms(t);
       if (typeToExpressionDict.ContainsKey(t.ToString())) {
         foreach (var expr in typeToExpressionDict[t.ToString()]) {
           arguments.Add(expr.expr);

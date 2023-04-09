@@ -131,6 +131,52 @@ namespace Microsoft.Dafny {
       return true;
     }
 
+    public string GetCollectionName(Expression expr) {
+      if (expr is BinaryExpr) {
+        return GetCollectionName((expr as BinaryExpr).E0);
+      }
+      else if (expr.Type.AsCollectionType == null) {
+        return Printer.ExprToString(expr);
+      } else {
+        if (expr is SeqSelectExpr) {
+          return GetCollectionName((expr as SeqSelectExpr).Seq);
+        } else if (expr is MultiSelectExpr) {
+          return GetCollectionName((expr as MultiSelectExpr).Array);
+        }
+        else {
+          return Printer.ExprToString(expr);
+        }
+      }
+    }
+
+    public IEnumerable<ExpressionDepth> ExtendInSeqExpressions(IEnumerable<ExpressionDepth> expressionList) {
+      foreach (var exprDepth in expressionList) {
+        yield return exprDepth;
+      }
+      var typeToExpressionDict = GetTypeToExpressionDict(expressionList);
+      foreach (var typeExprListTuple in typeToExpressionDict) {
+        var typeStr = typeExprListTuple.Key;
+        var exprList = typeExprListTuple.Value;
+        if (exprList[0].expr.Type.AsCollectionType != null) {
+          var collectionElementType = exprList[0].expr.Type.AsCollectionType.Arg;
+          collectionElementType = LemmaFinder.SubstituteTypeWithSynonyms(collectionElementType);
+          if (typeToExpressionDict.ContainsKey(collectionElementType.ToString())) {
+            foreach (var elem in typeToExpressionDict[collectionElementType.ToString()]) {
+              foreach (var collection in exprList) {
+                // var elemStr = Printer.ExprToString(elem.expr);
+                // var collectionStr = GetCollectionName(collection.expr);
+                // if (!elemStr.StartsWith(collectionStr)) {
+                  var InExpr = new BinaryExpr(elem.expr.tok, BinaryExpr.Opcode.In, elem.expr, collection.expr);
+                    InExpr.Type = Type.Bool;
+                  yield return new ExpressionDepth(InExpr, Math.Max(collection.depth, elem.depth) + 1);
+                // }
+              }
+            }
+          }
+        }
+      }
+    }
+
     public IEnumerable<ExpressionDepth> ExtendSeqSelectExpressions(IEnumerable<ExpressionDepth> expressionList) {
       // Console.WriteLine("here");
       foreach (var exprDepth in expressionList) {
@@ -554,7 +600,7 @@ namespace Microsoft.Dafny {
     }
 
     public IEnumerable<ExpressionDepth> ListArguments(Program program, Statement stmt) {
-      if (stmt.Tok.line > DafnyOptions.O.ProofEvaluatorInsertionPoint) {
+      if (stmt is null || stmt.Tok.line > DafnyOptions.O.ProofEvaluatorInsertionPoint) {
         yield break;
       }
       if (stmt is BlockStmt) {
@@ -645,6 +691,12 @@ namespace Microsoft.Dafny {
           if (exprDepth.depth + 1 <= maxExpressionDepth) {
             var cardinalityExpr = Expression.CreateCardinality(expr, program.BuiltIns);
             yield return new ExpressionDepth(cardinalityExpr, exprDepth.depth + 1);
+            
+            var cardinalityMinusOneExpr = Expression.CreateDecrement(cardinalityExpr, 1);
+            yield return new ExpressionDepth(cardinalityMinusOneExpr, exprDepth.depth + 1);
+            
+            var cardinalityMinusTwoExpr = Expression.CreateDecrement(cardinalityExpr, 2);
+            yield return new ExpressionDepth(cardinalityMinusTwoExpr, exprDepth.depth + 1);
           }
           if (t is SeqType) {
             {
@@ -682,7 +734,8 @@ namespace Microsoft.Dafny {
               {
                 // create drop last element of a sequence
                 var cardinalityExpr = Expression.CreateCardinality(expr, program.BuiltIns);
-                var dropLastElement = new SeqSelectExpr(expr.tok, false, expr, null, cardinalityExpr, null);
+                var cardinalityMinusOneExpr = Expression.CreateDecrement(expr, 1);
+                var dropLastElement = new SeqSelectExpr(expr.tok, false, expr, null, cardinalityMinusOneExpr, null);
                 dropLastElement.Type = t;
                 yield return new ExpressionDepth(dropLastElement, exprDepth.depth + 1);
               }
@@ -786,6 +839,10 @@ namespace Microsoft.Dafny {
               // var identExpr = Expression.CreateIdentExpr(convertedFormal);
               var exprDot = new ExprDotName(formal.tok, expr, formal.tok.val, null);
               exprDot.Type = Resolver.SubstType(formal.Type, subst);
+              if (exprDot.Type.AsTypeSynonym != null) {
+                var ts = exprDot.Type.AsTypeSynonym;
+                exprDot.Type = ts.Rhs;
+              }
               foreach (var v in TraverseFormal(program, new ExpressionDepth(exprDot, exprDepth.depth + 1))) {
                 // Console.WriteLine($"aaa {v.tok.val}");
                 // // var ngv = (Formal)variable;
@@ -798,6 +855,13 @@ namespace Microsoft.Dafny {
               // Console.WriteLine($"aaaa {formal.Name}");
             }
           }
+        }
+      } else if (cl is TypeSynonymDecl) {
+        var ts = cl as TypeSynonymDecl;
+        var substExpr = new Cloner().CloneExpr(expr);
+        substExpr.Type = ts.Rhs;
+        foreach (var v in TraverseFormal(program, new ExpressionDepth(substExpr, exprDepth.depth))) {
+          yield return v;
         }
       }
       // var members = expr.Type.NormalizeExpand().AsTopLevelTypeWithMembers;

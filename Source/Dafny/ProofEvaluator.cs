@@ -567,7 +567,8 @@ namespace Microsoft.Dafny {
       Dictionary<string, List<ExpressionFinder.ExpressionDepth>> typeToExpressionDict = null;
       if (desiredLemma != null) {
         var expressions = expressionFinder.ListArguments(program, desiredLemma);
-        var extendedExpressions = expressionFinder.ExtendSeqSelectExpressions(expressions);
+        var extendedSeqSelectExpressions = expressionFinder.ExtendSeqSelectExpressions(expressions);
+        var extendedExpressions = expressionFinder.ExtendInSeqExpressions(extendedSeqSelectExpressions);
         typeToExpressionDict = expressionFinder.GetRawExpressions(program, desiredLemma, extendedExpressions, true);
       } else {
         Console.WriteLine($"{lemmaName} was not found!");
@@ -757,7 +758,7 @@ namespace Microsoft.Dafny {
         }
         sep = ", ";
       }
-      Console.WriteLine(signature);
+      // Console.WriteLine(signature);
 
       var lemmaName = workingLemma.FullDafnyName;
 
