@@ -186,6 +186,14 @@ namespace Microsoft.Dafny {
       var output = response.Response;
       if (request is CloneAndVerifyRequest) {
         if (output.EndsWith("0 errors\n")) {
+          if (output.EndsWith(" 0 verified, 0 errors\n")) {
+            throw new NotSupportedException("grpc server didn't prove anything. check /proc:");
+          }
+          if (requestToCnt[request] == 0) {
+            Console.WriteLine($"{sw.ElapsedMilliseconds / 1000}:: proof pass without any change, not executing other verification requests");
+            IList<IMessage> items = new List<IMessage>();
+            tasksBuffer.TryReceiveAll(out items);
+          }
           var str = $"{sw.ElapsedMilliseconds / 1000}:: correct answer #{requestToCnt[request]}: ";
           var sep = "";
           foreach (var stmtExpr in requestToStmtExprList[request]) {

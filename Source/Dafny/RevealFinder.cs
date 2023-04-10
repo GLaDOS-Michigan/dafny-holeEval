@@ -68,10 +68,6 @@ namespace Microsoft.Dafny {
           var cl = d as TopLevelDeclWithMembers;
           if (cl != null) {
             foreach (var member in cl.Members) {
-              if (member is Lemma && member.ToString() == "NextPreservesAgreementChosenInv")
-              {
-                Console.WriteLine(member.ToString());
-              }
               if (member is Function) {
                 if (IsOpaque(member.Attributes)) {
                   List<Expression> lhss = new List<Expression>();
@@ -80,7 +76,7 @@ namespace Microsoft.Dafny {
                   rhss.Add(new ExprRhs(new ApplySuffix(member.tok, null, new NameSegment(member.tok, $"reveal_{member.ToString()}", new List<Type>()), new List<ActualBinding>())));
                   UpdateStmt updateStmt = new UpdateStmt(member.tok, member.tok, lhss, rhss);
                   result.Add(new ExpressionFinder.StatementDepth(updateStmt, 1));
-                  Console.WriteLine(Printer.StatementToString(updateStmt));
+                  // Console.WriteLine(Printer.StatementToString(updateStmt));
                 }
                 // var exprs = new List<Expression>();
                 // var stmt = new RevealStmt(member.BodyStartTok, member.BodyEndTok, exprs);

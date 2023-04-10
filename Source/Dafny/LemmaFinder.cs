@@ -37,7 +37,9 @@ namespace Microsoft.Dafny {
             foreach (var member in cl.Members) {
               if (member is Lemma) {
                 var lemmaExprs = GetAllPossibleLemmaInvocations(program, member as Lemma, typeToExpressionDict, maxLeastOneOccurenceDepth);
-                // Console.WriteLine($"{member.Name} -> {lemmaExprs.Count}");
+                if (lemmaExprs.Count > 0) {
+                  Console.WriteLine($"{member.Name} generating {lemmaExprs.Count} invocations");
+                }
                 foreach (var expr in lemmaExprs) {
                   List<LocalVariable> localVarList = new List<LocalVariable>();
                   List<Expression> lhss = new List<Expression>();

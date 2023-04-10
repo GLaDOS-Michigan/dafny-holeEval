@@ -25,7 +25,8 @@ namespace Microsoft.Dafny {
     IncorrectProof = 3,
     FalsePredicate = 4,
     InvalidExpr = 5,
-    NoMatchingTrigger = 6
+    NoMatchingTrigger = 6,
+    NotRunningDueToAlreadyCorrectCode = 7
   }
   public class HoleEvaluator {
     private string UnderscoreStr = "";
@@ -38,8 +39,7 @@ namespace Microsoft.Dafny {
     }
     public ExpressionFinder expressionFinder = null;
     private List<BitArray> bitArrayList = new List<BitArray>();
-    private List<float> executionTimes = new List<float>();
-    private List<float> startTimes = new List<float>();
+    private List<UInt64> executionTimes = new List<UInt64>();
     private Expression constraintExpr = null;
 
     public static bool IsGoodResult(Result result) {
@@ -72,10 +72,8 @@ namespace Microsoft.Dafny {
         var output = dafnyVerifier.dafnyOutput[request];
         var response = output.Response;
         var filePath = output.FileName;
-        var startTime = output.StartTime;
-        var execTime = output.ExecutionTime;
+        var execTime = output.ExecutionTimeInMs;
         executionTimes.Add(execTime);
-        startTimes.Add(startTime);
         Result res;
         if (position != -1) {
           var expectedOutput =
@@ -581,18 +579,11 @@ namespace Microsoft.Dafny {
       string executionTimesSummary = "";
       // executionTimes.Sort();
       for (int i = 0; i < executionTimes.Count; i++) {
-        executionTimesSummary += $"{i}, {executionTimes[i].ToString()}\n";
+        executionTimesSummary += $"{i}, {executionTimes[i]}\n";
       }
       await File.WriteAllTextAsync($"{DafnyOptions.O.HoleEvaluatorWorkingDirectory}/executionTimeSummary.txt",
             executionTimesSummary);
 
-      string startTimesSummary = "";
-      // startTimes.Sort();
-      for (int i = 0; i < startTimes.Count; i++) {
-        startTimesSummary += $"{i}, {(startTimes[i] - startTimes[0]).ToString()}\n";
-      }
-      await File.WriteAllTextAsync($"{DafnyOptions.O.HoleEvaluatorWorkingDirectory}/startTimeSummary.txt",
-            startTimesSummary);
       // for (int i = 0; i < bitArrayList.Count; i++) {
       //   var ba = bitArrayList[i];
       //   Console.WriteLine("------------------------------");

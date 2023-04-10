@@ -29,8 +29,7 @@ namespace Microsoft.Dafny {
     }
     public ExpressionFinder expressionFinder = null;
     private List<BitArray> bitArrayList = new List<BitArray>();
-    private List<float> executionTimes = new List<float>();
-    private List<float> startTimes = new List<float>();
+    private List<UInt64> executionTimes = new List<UInt64>();
     private Dictionary<int, Result> combinationResults = new Dictionary<int, Result>();
     public DafnyVerifierClient dafnyVerifier;
     private TasksList tasksList = null;
@@ -64,12 +63,14 @@ namespace Microsoft.Dafny {
       }
       var request = dafnyVerifier.requestsList[index];
       var output = dafnyVerifier.dafnyOutput[request[0]];
+      if (output.ExecutionTimeInMs == 0) {
+        combinationResults[index] = Result.NotRunningDueToAlreadyCorrectCode;
+        return;
+      }
       var response = output.Response;
       var filePath = output.FileName;
-      var startTime = output.StartTime;
-      var execTime = output.ExecutionTime;
+      var execTime = output.ExecutionTimeInMs;
       executionTimes.Add(execTime);
-      startTimes.Add(startTime);
       // Console.WriteLine($"{index} => {output}");
       // Console.WriteLine($"{output.EndsWith("0 errors\n")} {output.EndsWith($"resolution/type errors detected in {fileName}.dfy\n")}");
       // Console.WriteLine($"----------------------------------------------------------------");
@@ -88,7 +89,10 @@ namespace Microsoft.Dafny {
           }
           sep = ", ";
         }
-        // Console.WriteLine(str);
+        if (str == "") {
+          str = "true";
+        }
+        Console.WriteLine(str);
       } else {
         combinationResults[index] = Result.IncorrectProof;
       }
@@ -672,6 +676,7 @@ namespace Microsoft.Dafny {
       int invalidExprCount = 0;
       int falsePredicateCount = 0;
       int noMatchingTriggerCount = 0;
+      int notRunningDueToAlreadyCorrectCodeCount = 0;
       for (int i = 0; i < cnt; i++) {
         switch (combinationResults[i]) {
           case Result.InvalidExpr: invalidExprCount++; break;
@@ -680,29 +685,23 @@ namespace Microsoft.Dafny {
           case Result.CorrectProofByTimeout: correctProofByTimeoutCount++; break;
           case Result.IncorrectProof: incorrectProofCount++; break;
           case Result.NoMatchingTrigger: noMatchingTriggerCount++; break;
+          case Result.NotRunningDueToAlreadyCorrectCode: notRunningDueToAlreadyCorrectCodeCount++; break;
           case Result.Unknown: throw new NotSupportedException();
         }
       }
-      Console.WriteLine("{0,-15} {1,-15} {2,-15} {3,-15} {4, -25} {5, -15} {6, -15}",
-        "InvalidExpr", "IncorrectProof", "FalsePredicate", "CorrectProof", "CorrectProofByTimeout", "NoMatchingTrigger", "Total");
-      Console.WriteLine("{0,-15} {1,-15} {2,-15} {3,-15} {4, -25} {5, -15} {6, -15}",
+      Console.WriteLine("{0,-15} {1,-15} {2,-15} {3,-15} {4, -25} {5, -20} {6, -15} {7, -15}",
+        "InvalidExpr", "IncorrectProof", "FalsePredicate", "CorrectProof", "CorrectProofByTimeout", "NoMatchingTrigger", "NotRunning", "Total");
+      Console.WriteLine("{0,-15} {1,-15} {2,-15} {3,-15} {4, -25} {5, -20} {6, -15} {7, -15}",
         invalidExprCount, incorrectProofCount, falsePredicateCount, correctProofCount, correctProofByTimeoutCount,
-        noMatchingTriggerCount, cnt);
+        noMatchingTriggerCount, notRunningDueToAlreadyCorrectCodeCount, cnt);
       string executionTimesSummary = "";
       // executionTimes.Sort();
       for (int i = 0; i < executionTimes.Count; i++) {
-        executionTimesSummary += $"{i}, {executionTimes[i].ToString()}\n";
+        executionTimesSummary += $"{i}, {executionTimes[i]}\n";
       }
       await File.WriteAllTextAsync($"{DafnyOptions.O.HoleEvaluatorWorkingDirectory}/executionTimeSummary.txt",
             executionTimesSummary);
 
-      string startTimesSummary = "";
-      // startTimes.Sort();
-      for (int i = 0; i < startTimes.Count; i++) {
-        startTimesSummary += $"{i}, {(startTimes[i] - startTimes[0]).ToString()}\n";
-      }
-      await File.WriteAllTextAsync($"{DafnyOptions.O.HoleEvaluatorWorkingDirectory}/startTimeSummary.txt",
-            startTimesSummary);
       await dafnyVerifier.FinalizeCleanup();
       // for (int i = 0; i < bitArrayList.Count; i++) {
       //   var ba = bitArrayList[i];
@@ -801,7 +800,7 @@ namespace Microsoft.Dafny {
 
       dafnyVerifier.runDafnyProofCheck(newCode, tasksListDictionary[changingFilePath].Arguments.ToList(),
               exprStmtList, cnt, changingFilePath,
-              workingLemma.FullDafnyName);
+              workingLemma.FullSanitizedName);
     }
   }
 }
