@@ -594,10 +594,10 @@ namespace Microsoft.Dafny {
     public static Type String() { return new UserDefinedType(Token.NoToken, "string", null); }  // note, this returns an unresolved type
     public static readonly BigOrdinalType BigOrdinal = new BigOrdinalType();
 
-    [ThreadStatic]
+    // [ThreadStatic]
     private static List<VisibilityScope> scopes = new List<VisibilityScope>();
 
-    [ThreadStatic]
+    // [ThreadStatic]
     private static bool scopesEnabled = false;
 
     public static void PushScope(VisibilityScope scope) {

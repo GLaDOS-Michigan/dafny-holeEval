@@ -680,12 +680,10 @@ namespace Microsoft.Dafny {
           var oneLiteralExpr = Expression.CreateIntLiteral(expr.tok, 1);
           yield return new ExpressionDepth(oneLiteralExpr, 1);
           
-          if (exprDepth.depth + 1 <= maxExpressionDepth) {
-            var plusOneLiteralExpr = Expression.CreateIncrement(expr, 1);
-            yield return new ExpressionDepth(plusOneLiteralExpr, exprDepth.depth + 1);
-            var minusOneLiteralExpr = Expression.CreateDecrement(expr, 1);
-            yield return new ExpressionDepth(minusOneLiteralExpr, exprDepth.depth + 1);
-          }
+          var plusOneLiteralExpr = Expression.CreateIncrement(expr, 1);
+          yield return new ExpressionDepth(plusOneLiteralExpr, exprDepth.depth);
+          var minusOneLiteralExpr = Expression.CreateDecrement(expr, 1);
+          yield return new ExpressionDepth(minusOneLiteralExpr, exprDepth.depth);
         } else if (t is CollectionType) {
           // create cardinality
           if (exprDepth.depth + 1 <= maxExpressionDepth) {
@@ -775,14 +773,12 @@ namespace Microsoft.Dafny {
           oneLiteralExpr.Type = t;
           yield return new ExpressionDepth(oneLiteralExpr, 1);
 
-          if (exprDepth.depth + 1 <= maxExpressionDepth) {
-            var plusOneLiteralExpr = Expression.CreateIncrement(expr, 1);
-            plusOneLiteralExpr.Type = t;
-            yield return new ExpressionDepth(plusOneLiteralExpr, exprDepth.depth + 1);
-            var minusOneLiteralExpr = Expression.CreateDecrement(expr, 1);
-            minusOneLiteralExpr.Type = t;
-            yield return new ExpressionDepth(minusOneLiteralExpr, exprDepth.depth + 1);
-          }
+          var plusOneLiteralExpr = Expression.CreateIncrement(expr, 1);
+          plusOneLiteralExpr.Type = t;
+          yield return new ExpressionDepth(plusOneLiteralExpr, exprDepth.depth);
+          var minusOneLiteralExpr = Expression.CreateDecrement(expr, 1);
+          minusOneLiteralExpr.Type = t;
+          yield return new ExpressionDepth(minusOneLiteralExpr, exprDepth.depth);
         } else {
           throw new NotImplementedException();
         }
@@ -806,14 +802,12 @@ namespace Microsoft.Dafny {
           var oneLiteralExpr = Expression.CreateIntLiteral(expr.tok, 1);
           oneLiteralExpr.Type = t;
           yield return new ExpressionDepth(oneLiteralExpr, 1);
-          if (exprDepth.depth + 1 <= maxExpressionDepth) {
-            var plusOneLiteralExpr = Expression.CreateIncrement(expr, 1);
-            plusOneLiteralExpr.Type = t;
-            yield return new ExpressionDepth(plusOneLiteralExpr, exprDepth.depth + 1);
-            var minusOneLiteralExpr = Expression.CreateDecrement(expr, 1);
-            minusOneLiteralExpr.Type = t;
-            yield return new ExpressionDepth(minusOneLiteralExpr, exprDepth.depth + 1);
-          }
+          var plusOneLiteralExpr = Expression.CreateIncrement(expr, 1);
+          plusOneLiteralExpr.Type = t;
+          yield return new ExpressionDepth(plusOneLiteralExpr, exprDepth.depth);
+          var minusOneLiteralExpr = Expression.CreateDecrement(expr, 1);
+          minusOneLiteralExpr.Type = t;
+          yield return new ExpressionDepth(minusOneLiteralExpr, exprDepth.depth);
         }
         // Console.WriteLine($"{variable.Name} is SubsetTypeDecl");
       } else if (cl is ClassDecl) {
