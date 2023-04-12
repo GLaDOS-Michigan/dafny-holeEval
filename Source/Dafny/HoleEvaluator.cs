@@ -40,7 +40,7 @@ namespace Microsoft.Dafny {
     public ExpressionFinder expressionFinder = null;
     private List<BitArray> bitArrayList = new List<BitArray>();
     private List<UInt64> executionTimes = new List<UInt64>();
-    private Expression constraintExpr = null;
+    private ExpressionFinder.ExpressionDepth constraintExpr = null;
 
     public static bool IsGoodResult(Result result) {
       return (result == Result.CorrectProof ||
@@ -450,14 +450,14 @@ namespace Microsoft.Dafny {
         affectedFiles = affectedFiles.Distinct().ToList();
         // calculate holeEvaluatorConstraint Invocation
         if (constraintFunc != null) {
-          Dictionary<string, List<Expression>> typeToExpressionDictForInputs = new Dictionary<string, List<Expression>>();
+          Dictionary<string, HashSet<ExpressionFinder.ExpressionDepth>> typeToExpressionDictForInputs = new Dictionary<string, HashSet<ExpressionFinder.ExpressionDepth>>();
           foreach (var formal in baseFunc.Formals) {
-            var identExpr = Expression.CreateIdentExpr(formal);
+            var identExpr = new ExpressionFinder.ExpressionDepth(Expression.CreateIdentExpr(formal), 1);
             var typeString = formal.Type.ToString();
             if (typeToExpressionDictForInputs.ContainsKey(typeString)) {
               typeToExpressionDictForInputs[typeString].Add(identExpr);
             } else {
-              var lst = new List<Expression>();
+              var lst = new HashSet<ExpressionFinder.ExpressionDepth>();
               lst.Add(identExpr);
               typeToExpressionDictForInputs.Add(typeString, lst);
             }
@@ -465,12 +465,12 @@ namespace Microsoft.Dafny {
           var funcCalls = ExpressionFinder.GetAllPossibleFunctionInvocations(program, constraintFunc, typeToExpressionDictForInputs);
           foreach (var funcCall in funcCalls) {
             if (constraintExpr == null) {
-              constraintExpr = funcCall;
+              constraintExpr = new ExpressionFinder.ExpressionDepth(funcCall.expr, 1);
             } else {
-              constraintExpr = Expression.CreateAnd(constraintExpr, funcCall);
+              constraintExpr.expr = Expression.CreateAnd(constraintExpr.expr, funcCall.expr);
             }
           }
-          Console.WriteLine($"constraint expr to be added : {Printer.ExprToString(constraintExpr)}");
+          Console.WriteLine($"constraint expr to be added : {Printer.ExprToString(constraintExpr.expr)}");
         }
         expressionFinder.CalcDepthOneAvailableExpresssionsFromFunction(program, desiredFunction);
         desiredFunctionUnresolved = GetFunctionFromUnresolved(unresolvedProgram, funcName);
@@ -510,7 +510,7 @@ namespace Microsoft.Dafny {
         constraintFuncLineCount = constraintFuncCode.Count(f => (f == '\n'));
       }
       
-      lemmaForExprValidityString = GetValidityLemma(Paths[0], null, constraintExpr, -1);
+      lemmaForExprValidityString = GetValidityLemma(Paths[0], null, constraintExpr.expr, -1);
       lemmaForExprValidityLineCount = lemmaForExprValidityString.Count(f => (f == '\n'));
 
       for (int i = 0; i < expressionFinder.availableExpressions.Count; i++) {

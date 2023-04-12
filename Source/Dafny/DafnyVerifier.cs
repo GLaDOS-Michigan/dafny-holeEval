@@ -75,7 +75,7 @@ namespace Microsoft.Dafny {
       }
     }
     public Stopwatch sw;
-    public Dictionary<IMessage, VerificationResponse> dafnyOutput = new Dictionary<IMessage, VerificationResponse>();
+    public ConcurrentDictionary<IMessage, VerificationResponse> dafnyOutput = new ConcurrentDictionary<IMessage, VerificationResponse>();
     public Dictionary<int, List<IMessage>> requestsList = new Dictionary<int, List<IMessage>>();
     public Dictionary<IMessage, Expression> requestToExpr = new Dictionary<IMessage, Expression>();
     public Dictionary<IMessage, List<ProofEvaluator.ExprStmtUnion>> requestToStmtExprList = new Dictionary<IMessage, List<ProofEvaluator.ExprStmtUnion>>();
@@ -288,7 +288,7 @@ namespace Microsoft.Dafny {
       }
     }
     public void runDafny(string code, List<string> args, ExpressionFinder.ExpressionDepth exprDepth,
-        int cnt, int postConditionPos, int lemmaStartPos, string remoteFilePath) {
+        int cnt, int postConditionPos, int lemmaStartPos, string remoteFilePath, string timeout = "1h") {
       sentRequests++;
       // if (sentRequests == 500) {
       //   sentRequests = 0;
@@ -297,6 +297,7 @@ namespace Microsoft.Dafny {
       VerificationRequest request = new VerificationRequest();
       request.Code = code;
       request.Path = remoteFilePath;
+      request.Timeout = timeout;
       foreach (var arg in args) {
         request.Arguments.Add(arg);
       }
@@ -337,7 +338,7 @@ namespace Microsoft.Dafny {
       dafnyOutput[request] = new VerificationResponse();
     }
 
-    public void runDafnyProofCheck(string code, List<string> args, List<ProofEvaluator.ExprStmtUnion> exprStmtList, int cnt) {
+    public void runDafnyProofCheck(string code, List<string> args, List<ProofEvaluator.ExprStmtUnion> exprStmtList, int cnt, string timeout = "1h") {
       sentRequests++;
       // if (sentRequests == 500) {
       //   sentRequests = 0;
@@ -348,6 +349,7 @@ namespace Microsoft.Dafny {
       foreach (var arg in args) {
         request.Arguments.Add(arg);
       }
+      request.Timeout = timeout;
       if (!requestsList.ContainsKey(cnt)) {
         requestsList.Add(cnt, new List<IMessage>());
       }
@@ -368,7 +370,7 @@ namespace Microsoft.Dafny {
     }
 
     public void runDafnyProofCheck(string code, List<string> args, List<ProofEvaluator.ExprStmtUnion> exprStmtList,
-        int cnt, string filePath, string lemmaName) {
+        int cnt, string filePath, string lemmaName, string timeout = "1h") {
       sentRequests++;
       // if (sentRequests == 500) {
       //   sentRequests = 0;
@@ -379,6 +381,7 @@ namespace Microsoft.Dafny {
       var serverId = cnt % serversList.Count;
       request.DirectoryPath = baseFoldersPath[serverId].Path;
       request.ModifyingFile = filePath;
+      request.Timeout = timeout;
       foreach (var arg in args) {
         request.Arguments.Add(arg);
       }

@@ -149,6 +149,33 @@ namespace Microsoft.Dafny {
       }
     }
 
+    public IEnumerable<ExpressionDepth> ExtendFunctionInvocationExpressions(Program program, IEnumerable<ExpressionDepth> expressionList) {
+      foreach (var exprDepth in expressionList) {
+        yield return exprDepth;
+      }
+      var typeToExpressionDict = GetTypeToExpressionDict(expressionList);
+      foreach (var kvp in program.ModuleSigs) {
+        foreach (var d in kvp.Value.ModuleDef.TopLevelDecls) {
+          var cl = d as TopLevelDeclWithMembers;
+          if (cl != null) {
+            foreach (var member in cl.Members) {
+              if (member is Function) {
+                var functionInvocations = GetAllPossibleFunctionInvocations(program, member as Function, typeToExpressionDict);
+                foreach (var invocation in functionInvocations) {
+                  yield return invocation;
+                }
+              } else if (member is Predicate) {
+                var predicateInvocations = GetAllPossiblePredicateInvocations(program, member as Predicate, typeToExpressionDict);
+                foreach (var invocation in predicateInvocations) {
+                  yield return invocation;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
     public IEnumerable<ExpressionDepth> ExtendInSeqExpressions(IEnumerable<ExpressionDepth> expressionList) {
       foreach (var exprDepth in expressionList) {
         yield return exprDepth;
@@ -156,20 +183,19 @@ namespace Microsoft.Dafny {
       var typeToExpressionDict = GetTypeToExpressionDict(expressionList);
       foreach (var typeExprListTuple in typeToExpressionDict) {
         var typeStr = typeExprListTuple.Key;
-        var exprList = typeExprListTuple.Value;
-        if (exprList[0].expr.Type.AsCollectionType != null) {
-          var collectionElementType = exprList[0].expr.Type.AsCollectionType.Arg;
+        var exprHashSet = typeExprListTuple.Value;
+        var exprHashSetAny = exprHashSet.Where(x => true).FirstOrDefault();
+        if (exprHashSetAny.expr.Type.AsCollectionType != null) {
+          var collectionElementType = exprHashSetAny.expr.Type.AsCollectionType.Arg;
           collectionElementType = LemmaFinder.SubstituteTypeWithSynonyms(collectionElementType);
           if (typeToExpressionDict.ContainsKey(collectionElementType.ToString())) {
             foreach (var elem in typeToExpressionDict[collectionElementType.ToString()]) {
-              foreach (var collection in exprList) {
-                // var elemStr = Printer.ExprToString(elem.expr);
-                // var collectionStr = GetCollectionName(collection.expr);
-                // if (!elemStr.StartsWith(collectionStr)) {
+              foreach (var collection in exprHashSet) {
+                if (!(collection.expr is FunctionCallExpr)) {
                   var InExpr = new BinaryExpr(elem.expr.tok, BinaryExpr.Opcode.In, elem.expr, collection.expr);
                     InExpr.Type = Type.Bool;
                   yield return new ExpressionDepth(InExpr, Math.Max(collection.depth, elem.depth) + 1);
-                // }
+                }
               }
             }
           }
@@ -184,17 +210,19 @@ namespace Microsoft.Dafny {
       }
       var typeToExpressionDict = GetTypeToExpressionDict(expressionList);
       if (typeToExpressionDict.ContainsKey("int")) {
-        var intVarList = typeToExpressionDict["int"];
+        var intVarHashSet = typeToExpressionDict["int"];
         foreach (var type in typeToExpressionDict.Keys) {
-          var firstElem = typeToExpressionDict[type][0];
+          var firstElem = typeToExpressionDict[type].Where(x => true).FirstOrDefault();
           if (firstElem.expr.Type is SeqType) {
-            var seqVarList = typeToExpressionDict[type];
-            for (int i = 0; i < seqVarList.Count; i++) {
-              var seqVar = seqVarList[i];
-              for (int j = 0; j < intVarList.Count; j++) {
-                var seqSelectExpr = new SeqSelectExpr(seqVar.expr.tok, true, seqVar.expr, intVarList[j].expr, null);
+            var seqVarHashSet = typeToExpressionDict[type];
+            foreach (var seqVar in seqVarHashSet) {
+            // for (int i = 0; i < seqVarList.Count; i++) {
+              // var seqVar = seqVarList[i];
+              foreach (var intVar in intVarHashSet) {
+              // for (int j = 0; j < intVarList.Count; j++) {
+                var seqSelectExpr = new SeqSelectExpr(seqVar.expr.tok, true, seqVar.expr, intVar.expr, null);
                 seqSelectExpr.Type = (seqVar.expr.Type as SeqType).Arg;
-                yield return new ExpressionDepth(seqSelectExpr, Math.Max(seqVar.depth, intVarList[j].depth) + 1);
+                yield return new ExpressionDepth(seqSelectExpr, Math.Max(seqVar.depth, intVar.depth) + 1);
               }
             }
           }
@@ -218,9 +246,9 @@ namespace Microsoft.Dafny {
       CalcDepthOneAvailableExpresssions(program, desiredLemma, extendedExpressions);
     }
 
-    public Dictionary<string, List<ExpressionDepth>> GetTypeToExpressionDict(IEnumerable<ExpressionDepth> expressionList) {
+    public Dictionary<string, HashSet<ExpressionDepth>> GetTypeToExpressionDict(IEnumerable<ExpressionDepth> expressionList) {
       int maxEvalDepth = DafnyOptions.O.HoleEvaluatorExpressionDepth;
-      Dictionary<string, List<ExpressionDepth>> typeToExpressionDict = new Dictionary<string, List<ExpressionDepth>>();
+      Dictionary<string, HashSet<ExpressionDepth>> typeToExpressionDict = new Dictionary<string, HashSet<ExpressionDepth>>();
       foreach (var exprDepth in expressionList) {
         var expr = exprDepth.expr;
         var exprString = Printer.ExprToString(expr);
@@ -230,13 +258,13 @@ namespace Microsoft.Dafny {
           typeString = "_questionMark_";
         }
         if (typeToExpressionDict.ContainsKey(typeString)) {
-          bool containsItem = typeToExpressionDict[typeString].Any(
-               item => Printer.ExprToString(item.expr) == Printer.ExprToString(expr));
-          if (!containsItem) {
-            typeToExpressionDict[typeString].Add(exprDepth);
-          }
+          // bool containsItem = typeToExpressionDict[typeString].Any(
+          //      item => Printer.ExprToString(item.expr) == Printer.ExprToString(expr));
+          // if (!containsItem) {
+          typeToExpressionDict[typeString].Add(exprDepth);
+          // }
         } else {
-          var lst = new List<ExpressionDepth>();
+          var lst = new HashSet<ExpressionDepth>();
           lst.Add(exprDepth);
           typeToExpressionDict.Add(typeString, lst);
         }
@@ -245,25 +273,25 @@ namespace Microsoft.Dafny {
       return typeToExpressionDict;
     }
 
-    public Dictionary<string, List<ExpressionDepth>> GetRawExpressions(Program program, MemberDecl decl,
+    public Dictionary<string, HashSet<ExpressionDepth>> GetRawExpressions(Program program, MemberDecl decl,
         IEnumerable<ExpressionDepth> expressions, bool addToAvailableExpressions) {
       var typeToExpressionDict = GetTypeToExpressionDict(expressions);
-      foreach (var kvp in program.ModuleSigs) {
-        foreach (var d in kvp.Value.ModuleDef.TopLevelDecls) {
-          var cl = d as TopLevelDeclWithMembers;
-          if (cl != null) {
-            foreach (var member in cl.Members) {
-              if (member is Predicate) {
-                var predicateInvocations = GetAllPossiblePredicateInvocations(program, member as Predicate, typeToExpressionDict);
-                if (!typeToExpressionDict.ContainsKey("bool")) {
-                  typeToExpressionDict.Add("bool", new List<ExpressionDepth>());
-                }
-                typeToExpressionDict["bool"].AddRange(predicateInvocations);
-              }
-            }
-          }
-        }
-      }
+      // foreach (var kvp in program.ModuleSigs) {
+      //   foreach (var d in kvp.Value.ModuleDef.TopLevelDecls) {
+      //     var cl = d as TopLevelDeclWithMembers;
+      //     if (cl != null) {
+      //       foreach (var member in cl.Members) {
+      //         if (member is Predicate) {
+      //           var predicateInvocations = GetAllPossiblePredicateInvocations(program, member as Predicate, typeToExpressionDict);
+      //           if (!typeToExpressionDict.ContainsKey("bool")) {
+      //             typeToExpressionDict.Add("bool", new HashSet<ExpressionDepth>());
+      //           }
+      //           typeToExpressionDict["bool"].UnionWith(predicateInvocations);
+      //         }
+      //       }
+      //     }
+      //   }
+      // }
       if (decl is Function) {
         var desiredFunction = decl as Function;
         var equalExprToCheck = desiredFunction.Body;
@@ -275,9 +303,10 @@ namespace Microsoft.Dafny {
           var t = equalExprList[k][0];
           if (typeToExpressionDict.ContainsKey(t)) {
             for (int i = 1; i < equalExprList[k].Count; i++) {
-              for (int j = 0; j < typeToExpressionDict[t].Count; j++) {
-                if (Printer.ExprToString(typeToExpressionDict[t][j].expr) == equalExprList[k][i]) {
-                  typeToExpressionDict[t].RemoveAt(j);
+              foreach (var e in typeToExpressionDict[t]) {
+              // for (int j = 0; j < typeToExpressionDict[t].Count; j++) {
+                if (Printer.ExprToString(e.expr) == equalExprList[k][i]) {
+                  typeToExpressionDict[t].Remove(e);
                   break;
                 }
               }
@@ -287,8 +316,8 @@ namespace Microsoft.Dafny {
       }
       if (addToAvailableExpressions) {
         foreach (var t in typeToExpressionDict) {
-          for (int i = 0; i < t.Value.Count; i++) {
-            availableExpressions.Add(t.Value[i]);
+          foreach (var e in t.Value) {
+            availableExpressions.Add(e);
           }
         }
       }
@@ -297,19 +326,16 @@ namespace Microsoft.Dafny {
 
     public void CalcDepthOneAvailableExpresssions(Program program, MemberDecl decl, IEnumerable<ExpressionDepth> expressions) {
       Contract.Requires(availableExpressions.Count == 0);
-      Dictionary<string, List<ExpressionDepth>> typeToExpressionDict = GetRawExpressions(program, decl, expressions, false);
+      Dictionary<string, HashSet<ExpressionDepth>> typeToExpressionDict = GetRawExpressions(program, decl, expressions, false);
 
       var trueExpr = Expression.CreateBoolLiteral(decl.tok, true);
       availableExpressions.Add(new ExpressionDepth(trueExpr, 1));
       foreach (var k in typeToExpressionDict.Keys) {
-        var values = typeToExpressionDict[k];
+        var values = typeToExpressionDict[k].ToList();
         if (k == "_questionMark_") {
-          for (int i = 0; i < values.Count; i++) {
-            {
-              // No change to the type, add as is
-              var expr = values[i];
-              availableExpressions.Add(expr);
-            }
+          foreach (var expr in values) {
+            // No change to the type, add as is
+            availableExpressions.Add(expr);
           }
         } else {
           for (int i = 0; i < values.Count; i++) {
@@ -506,26 +532,28 @@ namespace Microsoft.Dafny {
       return result;
     }
 
-    public static IEnumerable<Expression> ListInvocations(
+    public static IEnumerable<ExpressionDepth> ListFunctionInvocations(
         Function func,
-        Dictionary<string, List<Expression>> typeToExpressionDict,
-        List<Expression> arguments,
+        Dictionary<string, HashSet<ExpressionDepth>> typeToExpressionDict,
+        List<ExpressionDepth> arguments,
         int shouldFillIndex) {
       if (shouldFillIndex == func.Formals.Count) {
         List<ActualBinding> bindings = new List<ActualBinding>();
+        var depth = 0;
         foreach (var arg in arguments) {
-          bindings.Add(new ActualBinding(null, arg));
+          bindings.Add(new ActualBinding(null, arg.expr));
+          depth = Math.Max(depth, arg.depth);
         }
         var funcCallExpr = new FunctionCallExpr(func.tok, func.FullDafnyName, new ImplicitThisExpr(func.tok), func.tok, bindings);
         funcCallExpr.Type = func.ResultType;
-        yield return funcCallExpr;
+        yield return new ExpressionDepth(funcCallExpr, depth);
         yield break;
       }
       var t = func.Formals[shouldFillIndex].Type;
       if (typeToExpressionDict.ContainsKey(t.ToString())) {
         foreach (var expr in typeToExpressionDict[t.ToString()]) {
           arguments.Add(expr);
-          foreach (var ans in ListInvocations(func, typeToExpressionDict, arguments, shouldFillIndex + 1)) {
+          foreach (var ans in ListFunctionInvocations(func, typeToExpressionDict, arguments, shouldFillIndex + 1)) {
             yield return ans;
           }
           arguments.RemoveAt(arguments.Count - 1);
@@ -533,12 +561,12 @@ namespace Microsoft.Dafny {
       }
     }
 
-    public static List<Expression> GetAllPossibleFunctionInvocations(Program program,
+    public static List<ExpressionDepth> GetAllPossibleFunctionInvocations(Program program,
         Function func,
-        Dictionary<string, List<Expression>> typeToExpressionDict) {
-      List<Expression> result = new List<Expression>();
-      List<Expression> workingList = new List<Expression>();
-      foreach (var expr in ListInvocations(func, typeToExpressionDict, workingList, 0)) {
+        Dictionary<string, HashSet<ExpressionDepth>> typeToExpressionDict) {
+      List<ExpressionDepth> result = new List<ExpressionDepth>();
+      List<ExpressionDepth> workingList = new List<ExpressionDepth>();
+      foreach (var expr in ListFunctionInvocations(func, typeToExpressionDict, workingList, 0)) {
         result.Add(expr);
       }
       return result;
@@ -546,7 +574,7 @@ namespace Microsoft.Dafny {
 
     public static IEnumerable<ExpressionDepth> ListPredicateInvocations(
         Predicate func,
-        Dictionary<string, List<ExpressionDepth>> typeToExpressionDict,
+        Dictionary<string, HashSet<ExpressionDepth>> typeToExpressionDict,
         List<ExpressionDepth> arguments,
         int shouldFillIndex) {
       if (shouldFillIndex == func.Formals.Count) {
@@ -573,10 +601,10 @@ namespace Microsoft.Dafny {
       }
     }
 
-    public static List<ExpressionDepth> GetAllPossiblePredicateInvocations(Program program,
+    public static HashSet<ExpressionDepth> GetAllPossiblePredicateInvocations(Program program,
         Predicate func,
-        Dictionary<string, List<ExpressionDepth>> typeToExpressionDict) {
-      List<ExpressionDepth> result = new List<ExpressionDepth>();
+        Dictionary<string, HashSet<ExpressionDepth>> typeToExpressionDict) {
+      HashSet<ExpressionDepth> result = new HashSet<ExpressionDepth>();
       List<ExpressionDepth> workingList = new List<ExpressionDepth>();
       foreach (var expr in ListPredicateInvocations(func, typeToExpressionDict, workingList, 0)) {
         result.Add(expr);

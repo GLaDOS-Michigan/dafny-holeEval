@@ -449,6 +449,16 @@ namespace Microsoft.Dafny {
       return result;
     }
 
+    public int GetTimeLimitMultiplier(Attributes attributes) {
+      if (attributes == null) {
+        return 1;
+      }
+      if (attributes.Name == "timeLimitMultiplier") {
+        return Int32.Parse(Printer.ExprToString(attributes.Args[0]));
+      }
+      return GetTimeLimitMultiplier(attributes.Prev);
+    }
+
     public async Task<bool> EvaluateAfterRemoveFileLine(Program program, string removeFileLine, int depth, int expressionDepth) {
       var erasingLemmaName = CodeModifier.Erase(program, removeFileLine);
       return await Evaluate(program, erasingLemmaName, depth, expressionDepth);
@@ -469,12 +479,6 @@ namespace Microsoft.Dafny {
       dafnyVerifier = new DafnyVerifierClient(DafnyOptions.O.HoleEvaluatorServerIpPortList, $"output_{lemmaName}");
       expressionFinder = new ExpressionFinder(this);
       bool runOnce = DafnyOptions.O.HoleEvaluatorRunOnce;
-      int timeLimitMultiplier = 2;
-      int timeLimitMultiplierLength = 0;
-      while (timeLimitMultiplier >= 1) {
-        timeLimitMultiplierLength++;
-        timeLimitMultiplier /= 10;
-      }
 
       // Collect all paths from baseFunc to func
       Console.WriteLine($"{lemmaName} {depth} {expressionDepth}");
@@ -568,11 +572,12 @@ namespace Microsoft.Dafny {
       //   }
       // }
       // return true;
-      Dictionary<string, List<ExpressionFinder.ExpressionDepth>> typeToExpressionDict = null;
+      Dictionary<string, HashSet<ExpressionFinder.ExpressionDepth>> typeToExpressionDict = null;
       if (desiredLemma != null) {
         var expressions = expressionFinder.ListArguments(program, desiredLemma);
         var extendedSeqSelectExpressions = expressionFinder.ExtendSeqSelectExpressions(expressions);
-        var extendedExpressions = expressionFinder.ExtendInSeqExpressions(extendedSeqSelectExpressions);
+        var extendedFunctionInvocationsExpressions = expressionFinder.ExtendFunctionInvocationExpressions(program, extendedSeqSelectExpressions);
+        var extendedExpressions = expressionFinder.ExtendInSeqExpressions(extendedFunctionInvocationsExpressions);
         typeToExpressionDict = expressionFinder.GetRawExpressions(program, desiredLemma, extendedExpressions, true);
       } else {
         Console.WriteLine($"{lemmaName} was not found!");
@@ -646,6 +651,8 @@ namespace Microsoft.Dafny {
       // empty expression list should represent the original code without any additions
       Console.WriteLine($"{dafnyVerifier.sw.ElapsedMilliseconds / 1000}:: start generatinng expressions and lemmas");
       workingLemma = desiredLemma;
+      var timeLimitMultiplier = GetTimeLimitMultiplier(desiredLemma.Attributes);
+      workingLemmaTimelimitMultiplier = $"{timeLimitMultiplier}m";
       workingLemmaCode = File.ReadAllLines(workingLemma.BodyStartTok.filename);
       mergedCode.Add(String.Join('\n', workingLemmaCode.Take(workingLemma.tok.line - 1)));
       // placeholder for workingLemma
@@ -739,6 +746,7 @@ namespace Microsoft.Dafny {
 
     private Lemma workingLemma = null;
     private string[] workingLemmaCode;
+    private string workingLemmaTimelimitMultiplier = "1m";
     private List<string> mergedCode = new List<string>();
 
     public void PrintExprAndCreateProcess(Program program, List<ExprStmtUnion> exprStmtList, int cnt) {
@@ -800,7 +808,8 @@ namespace Microsoft.Dafny {
 
       dafnyVerifier.runDafnyProofCheck(newCode, tasksListDictionary[changingFilePath].Arguments.ToList(),
               exprStmtList, cnt, changingFilePath,
-              workingLemma.FullSanitizedName);
+              workingLemma.FullSanitizedName,
+              workingLemmaTimelimitMultiplier);
     }
   }
 }

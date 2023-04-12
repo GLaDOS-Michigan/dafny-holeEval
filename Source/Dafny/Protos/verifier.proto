@@ -32,6 +32,9 @@ message CloneAndVerifyRequest {
   string modifyingFile = 3;
   // List of arguments to be passed to Dafny
   repeated string arguments = 4;
+  // How long should it wait for the Dafny request? 
+  // This value will be given to `timeout` command in Linux (e.g. 10s, 1m)
+  string timeout = 5;
 }
 
 message TmpFolder {
@@ -59,6 +62,9 @@ message VerificationRequest {
   string path = 2;
   // List of arguments to be passed to Dafny
   repeated string arguments = 3;
+  // How long should it wait for the Dafny request? 
+  // This value will be given to `timeout` command in Linux (e.g. 10s, 1m)
+  string timeout = 4;
 }
 
 // In case the response of CloneAndVerifyRequest is not deleting the
