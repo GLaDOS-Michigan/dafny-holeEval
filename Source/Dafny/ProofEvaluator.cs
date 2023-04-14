@@ -540,18 +540,18 @@ namespace Microsoft.Dafny {
           }
         }
       }
-      // if (DafnyOptions.O.ProofEvaluatorCollectAllTriggerMatches) {
-        // foreach (var t in typeToTriggerDict.Keys) {
-        //   Console.WriteLine("--------------------------------");
-        //   Console.WriteLine($"{t} {typeToTriggerDict[t].Count}");
-        //   foreach (var trigger in typeToTriggerDict[t]) {
-        //     var triggerStr = Printer.ExprToString(trigger);
-        //     // numberOfMatches.Add(triggerStr, 0);
-        //     Console.WriteLine(triggerStr);
-        //   }
-        //   Console.WriteLine("--------------------------------");
-        // }
-      // }
+      if (DafnyOptions.O.HoleEvaluatorVerboseMode) {
+        foreach (var t in typeToTriggerDict.Keys) {
+          Console.WriteLine("--------------------------------");
+          Console.WriteLine($"{t} {typeToTriggerDict[t].Count}");
+          foreach (var trigger in typeToTriggerDict[t]) {
+            var triggerStr = Printer.ExprToString(trigger);
+            // numberOfMatches.Add(triggerStr, 0);
+            Console.WriteLine(triggerStr);
+          }
+          Console.WriteLine("--------------------------------");
+        }
+      }
       // var subLemmas = GetSubLemmas(program, desiredLemma);
       // foreach (var subLemma in subLemmas) {
       //   Console.WriteLine("-------");
@@ -584,16 +584,18 @@ namespace Microsoft.Dafny {
         return false;
       }
 
-      // Console.WriteLine("Type To Expression Dict:");
-      // foreach (var t in typeToExpressionDict.Keys) {
-      //   Console.WriteLine("--------------------------------");
-      //   Console.WriteLine($"{t} {typeToExpressionDict[t].Count}");
-      //   foreach (var expr in typeToExpressionDict[t]) {
-      //     var exprStr = $"{Printer.ExprToString(expr.expr)}:{expr.depth}";
-      //     Console.WriteLine(exprStr);
-      //   }
-      //   Console.WriteLine("--------------------------------");
-      // }
+      if (DafnyOptions.O.HoleEvaluatorVerboseMode) {
+        Console.WriteLine("Type To Expression Dict:");
+        foreach (var t in typeToExpressionDict.Keys) {
+          Console.WriteLine("--------------------------------");
+          Console.WriteLine($"{t} {typeToExpressionDict[t].Count}");
+          foreach (var expr in typeToExpressionDict[t]) {
+            var exprStr = $"{Printer.ExprToString(expr.expr)}:{expr.depth}";
+            Console.WriteLine(exprStr);
+          }
+          Console.WriteLine("--------------------------------");
+        }
+      }
       // return true;
       var statements = new List<ExpressionFinder.StatementDepth>();
       if (expressionDepth <= 1) {
@@ -765,7 +767,9 @@ namespace Microsoft.Dafny {
         }
         sep = ", ";
       }
-      // Console.WriteLine(signature);
+      if (DafnyOptions.O.HoleEvaluatorVerboseMode) {
+        Console.WriteLine(signature);
+      }
 
       var lemmaName = workingLemma.FullDafnyName;
 

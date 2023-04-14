@@ -187,19 +187,23 @@ namespace Microsoft.Dafny {
             // } else {
             //   Console.WriteLine($"condition : null");
             // }
-            queue.Enqueue(new Tuple<Expression, Expression, Function>(
-              (currExprCondParentTuple.Item1 as FunctionCallExpr).Function.Body,
-              null,
-              (currExprCondParentTuple.Item1 as FunctionCallExpr).Function));
-            G.AddVertex((currExprCondParentTuple.Item1 as FunctionCallExpr).Function);
-            G.AddEdge(
-              currExprCondParentTuple.Item3,
-              (currExprCondParentTuple.Item1 as FunctionCallExpr).Function,
-              currExprCondParentTuple.Item1 as FunctionCallExpr,
-              currExprCondParentTuple.Item2);
-            // Console.WriteLine("-------------------------------------");
-            // keys.Add(Printer.ExprToString((currExprParentTuple.Item1 as FunctionCallExpr).Function.Body) + ":" + (currExprParentTuple.Item1 as FunctionCallExpr).Function.Body);
+            // if ((currExprCondParentTuple.Item1 as FunctionCallExpr).Function.ToString() == ) {
+
             // }
+            if (currExprCondParentTuple.Item3 != (currExprCondParentTuple.Item1 as FunctionCallExpr).Function) {
+              queue.Enqueue(new Tuple<Expression, Expression, Function>(
+                (currExprCondParentTuple.Item1 as FunctionCallExpr).Function.Body,
+                null,
+                (currExprCondParentTuple.Item1 as FunctionCallExpr).Function));
+              G.AddVertex((currExprCondParentTuple.Item1 as FunctionCallExpr).Function);
+              G.AddEdge(
+                currExprCondParentTuple.Item3,
+                (currExprCondParentTuple.Item1 as FunctionCallExpr).Function,
+                currExprCondParentTuple.Item1 as FunctionCallExpr,
+                currExprCondParentTuple.Item2);
+              // Console.WriteLine("-------------------------------------");
+              // keys.Add(Printer.ExprToString((currExprParentTuple.Item1 as FunctionCallExpr).Function.Body) + ":" + (currExprParentTuple.Item1 as FunctionCallExpr).Function.Body);
+            }
           }
         }
         if (currExprCondParentTuple.Item1 is ITEExpr) {
@@ -292,7 +296,8 @@ namespace Microsoft.Dafny {
         Paths.Add(new List<Tuple<Function, FunctionCallExpr, Expression>>(CurrentPath));
         return;
       }
-      foreach (var nwPair in CG.AdjacencyWeightList[source]) {
+      var neighbourWeightList = CG.AdjacencyWeightList[source];
+      foreach (var nwPair in neighbourWeightList) {
         CurrentPath.Add(new Tuple<Function, FunctionCallExpr, Expression>(
           nwPair.Item1, nwPair.Item2, nwPair.Item3));
         GetAllPaths(nwPair.Item1, destination);
@@ -518,8 +523,9 @@ namespace Microsoft.Dafny {
         PrintExprAndCreateProcess(unresolvedProgram, expressionFinder.availableExpressions[i], i);
         desiredFunctionUnresolved.Body = topLevelDeclCopy.Body;
       }
+      Console.WriteLine($"{dafnyVerifier.sw.ElapsedMilliseconds / 1000}:: finish generatinng expressions and lemmas");
       await dafnyVerifier.startProofTasksAccordingToPriority();
-      Console.WriteLine("finish");
+      Console.WriteLine($"{dafnyVerifier.sw.ElapsedMilliseconds / 1000}:: finish exploring");
 
       dafnyVerifier.Cleanup();
       // bool foundCorrectExpr = false;
@@ -816,10 +822,12 @@ namespace Microsoft.Dafny {
 
     public void PrintExprAndCreateProcess(Program program, ExpressionFinder.ExpressionDepth exprDepth, int cnt) {
       bool runOnce = DafnyOptions.O.HoleEvaluatorRunOnce;
-      if (cnt % 5000 == 1) {
+      if (cnt % 1000 == 1) {
         Console.WriteLine($"{dafnyVerifier.sw.ElapsedMilliseconds / 1000}:: {cnt}");
       }
-      Console.WriteLine($"{cnt} {Printer.ExprToString(exprDepth.expr)}\t\t{exprDepth.depth}");
+      if (DafnyOptions.O.HoleEvaluatorVerboseMode) {
+        Console.WriteLine($"{cnt} {Printer.ExprToString(exprDepth.expr)}\t\t{exprDepth.depth}");
+      }
       var funcName = workingFunc.Name;
 
       int lemmaForExprValidityPosition = -1;

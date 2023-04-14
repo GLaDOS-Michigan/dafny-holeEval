@@ -235,7 +235,10 @@ namespace Microsoft.Dafny {
       Contract.Requires(desiredFunction != null);
       Contract.Requires(availableExpressions.Count == 0);
       var expressions = ListArguments(program, desiredFunction);
-      CalcDepthOneAvailableExpresssions(program, desiredFunction, expressions);
+      var extendedSeqSelectExpressions = ExtendSeqSelectExpressions(expressions);
+      var extendedFunctionInvocationsExpressions = ExtendFunctionInvocationExpressions(program, extendedSeqSelectExpressions);
+      var extendedExpressions = ExtendInSeqExpressions(extendedFunctionInvocationsExpressions);
+      CalcDepthOneAvailableExpresssions(program, desiredFunction, extendedExpressions);
     }
 
     public void CalcDepthOneAvailableExpresssionsFromLemma(Program program, Lemma desiredLemma) {
@@ -339,6 +342,10 @@ namespace Microsoft.Dafny {
           }
         } else {
           for (int i = 0; i < values.Count; i++) {
+            if (k == "bool") {
+              availableExpressions.Add(new ExpressionDepth(values[i].expr, values[i].depth));
+              continue;
+            }
             for (int j = i + 1; j < values.Count; j++) {
               if (values[i].expr is LiteralExpr && values[j].expr is LiteralExpr) {
                 continue;
@@ -363,9 +370,6 @@ namespace Microsoft.Dafny {
                 availableExpressions.Add(new ExpressionDepth(neqExpr, Math.Max(values[i].depth, values[j].depth)));
                 negateOfExpressionIndex[availableExpressions.Count - 1] = availableExpressions.Count - 2;
                 negateOfExpressionIndex[availableExpressions.Count - 2] = availableExpressions.Count - 1;
-              }
-              if (k == "bool") {
-                continue;
               }
 
               // Lower than
@@ -651,8 +655,8 @@ namespace Microsoft.Dafny {
       }
       else if (stmt is VarDeclStmt) {
         var varDecl = stmt as VarDeclStmt;
-        // var identExpr = Expression.CreateIdentExpr(varDecl.Update.Lhss[0]);
-        foreach (var exprDepth in TraverseFormal(program, new ExpressionDepth(varDecl.Update.Lhss[0], 1))) {
+        var identExpr = Expression.CreateIdentExpr(varDecl.Locals[0]);
+        foreach (var exprDepth in TraverseFormal(program, new ExpressionDepth(identExpr, 1))) {
           yield return exprDepth;
         }
       }

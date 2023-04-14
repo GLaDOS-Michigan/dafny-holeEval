@@ -148,6 +148,7 @@ namespace Microsoft.Dafny {
     public bool HoleEvaluatorCreateAuxFiles = true;
     public bool ProofEvaluatorCollectAllTriggerMatches = false;
     public bool HoleEvaluatorDumpOutput = false;
+    public bool HoleEvaluatorVerboseMode = false;
     public string HoleEvaluatorWorkingDirectory = "/tmp/";
     public string HoleEvaluatorServerIpPortList = null;
     public string HoleEvaluatorInvariant = null;
@@ -593,6 +594,10 @@ namespace Microsoft.Dafny {
 
         case "holeEvalDumpOutput":
           HoleEvaluatorDumpOutput = true;
+          return true;
+
+        case "holeEvalVerboseMode":
+          HoleEvaluatorVerboseMode = true;
           return true;
 
         case "proofEvalInsertionPoint":

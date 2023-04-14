@@ -29,14 +29,18 @@ namespace Microsoft.Dafny {
           break;
         }
       }
-      if (i != exprList.Count) {
-        exprList.RemoveAt(i);
+      if (i != 0) {
+        exprList.RemoveAt(i - 1);
       }
-      var body = exprList[0];
-      for (int j = 1; j < exprList.Count; j++) {
-        body = Expression.CreateAnd(body, exprList[j]);
+      if (exprList.Count == 0) {
+        predicate.Body = Expression.CreateBoolLiteral(predicate.tok, true);
+      } else {
+        var body = exprList[0];
+        for (int j = 1; j < exprList.Count; j++) {
+          body = Expression.CreateAnd(body, exprList[j]);
+        }
+        predicate.Body = body;
       }
-      predicate.Body = body;
     }
 
     public static string Erase(Program program, string removeFileLine) {
@@ -175,6 +179,9 @@ namespace Microsoft.Dafny {
     }
 
     public static bool InsertIntoStatement(Statement stmt, List<Statement> stmtList, int lineNo) {
+      if (stmt.EndTok.line < lineNo) {
+        return true;
+      }
       if (stmt is BlockStmt) {
         InsertIntoBlockStmt(stmt as BlockStmt, stmtList, lineNo);
         return false;

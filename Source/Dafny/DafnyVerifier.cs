@@ -117,6 +117,7 @@ namespace Microsoft.Dafny {
       TmpFolder duplicateFileRequest = new TmpFolder();
       duplicateFileRequest.Path = baseFoldersPath[serverId].Path;
       duplicateFileRequest.ModifyingFile = changingFilePath;
+      duplicateFileRequest.Owner = "arminvak";
       TmpFolder targetFolder = serversList[serverId].DuplicateFolder(duplicateFileRequest);
       temporaryFoldersList[serverId].Add(targetFolder);
       return targetFolder;
