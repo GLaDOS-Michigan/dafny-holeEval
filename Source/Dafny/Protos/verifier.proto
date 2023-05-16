@@ -8,10 +8,11 @@ package DafnyExecutorServer;
 service DafnyVerifierService {
   // Run Dafny on the given code and returns the output
   rpc Verify(VerificationRequest) returns (VerificationResponse) {}
-  rpc CloneAndVerify(CloneAndVerifyRequest) returns (VerificationResponse) {}
+  rpc CloneAndVerify(CloneAndVerifyRequest) returns (VerificationResponseList) {}
   rpc CreateTmpFolder(CreateDir) returns (TmpFolder) {}
   rpc RemoveFolder(TmpFolder) returns (Empty) {}
   rpc DuplicateFolder(TmpFolder) returns (TmpFolder) {}
+  rpc WriteToRemoteFile(VerificationRequest) returns (Empty) {}
 }
 
 message CreateDir {
@@ -30,17 +31,16 @@ message CloneAndVerifyRequest {
   string code = 2;
   // The location where the code should be written in the dafny server
   string modifyingFile = 3;
-  // List of arguments to be passed to Dafny
-  repeated string arguments = 4;
-  // How long should it wait for the Dafny request? 
-  // This value will be given to `timeout` command in Linux (e.g. 10s, 1m)
-  string timeout = 5;
+  // List of verification requests to be run after cloning the base folder
+  repeated VerificationRequest requestsList = 4;
 }
 
 message TmpFolder {
   // Path to the temporary folder
   string path = 1;
   string modifyingFile = 2;
+  // changes the owner of the created directory (if specified)
+  string owner = 3;
 }
 
 // Three modes:
@@ -67,11 +67,14 @@ message VerificationRequest {
   string timeout = 4;
 }
 
-// In case the response of CloneAndVerifyRequest is not deleting the
-// cloned
+message VerificationResponseList {
+  repeated VerificationResponse responseList = 1;
+  uint64 executionTimeInMs = 2;
+}
+
 message VerificationResponse {
   // Output of Dafny
-  string response = 1;
+  bytes response = 1;
   string fileName = 2;
   uint64 executionTimeInMs = 3;
 }

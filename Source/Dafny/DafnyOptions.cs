@@ -157,6 +157,7 @@ namespace Microsoft.Dafny {
     public string ProofEvaluatorRemoveFileLine = null;
     public int ProofEvaluatorInsertionPoint = -1;
     public string HoleEvaluatorCommands = null;
+    public bool HoleEvaluatorIncludeFunctionInvocations = false;
     public string ProofEvaluatorExcludeDir = null;
 
     protected override bool ParseOption(string name, Bpl.CommandLineOptionEngine.CommandLineParseState ps) {
@@ -619,6 +620,10 @@ namespace Microsoft.Dafny {
           }
           return true;
         
+        case "holeEvalIncludeFunctionInvocations":
+          HoleEvaluatorIncludeFunctionInvocations = true;
+          return true;
+
         case "proofEvalExcludeDir":
           if (ps.ConfirmArgumentCount(1)) {
             ProofEvaluatorExcludeDir = args[ps.i];

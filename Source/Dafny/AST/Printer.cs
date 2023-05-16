@@ -24,7 +24,6 @@ namespace Microsoft.Dafny {
     public string Prefix = "";
     public string UniqueStringBeforeUnderscore = "";
     public ModuleDefinition ModuleForTypes = null;
-    private HashSet<ModuleDefinition> seenModules = new HashSet<ModuleDefinition>();
     private string GetAppenededUnique(string name) {
       if (name.StartsWith("_")) {
         var tmp = name.Replace("#", "");
@@ -34,7 +33,7 @@ namespace Microsoft.Dafny {
       }
     }
 
-        public string GetFullModuleName(ModuleDefinition moduleDef) {
+    static public string GetFullModuleName(ModuleDefinition moduleDef) {
       if (moduleDef.Name == "_module") {
         return "";
       } else if (moduleDef.EnclosingModule.Name == "_module") {
@@ -43,7 +42,7 @@ namespace Microsoft.Dafny {
         return GetFullModuleName(moduleDef.EnclosingModule) + "." + moduleDef.Name;
       }
     }
-    public string GetFullTypeString(ModuleDefinition moduleDef, Type type) {
+    static public string GetFullTypeString(ModuleDefinition moduleDef, Type type, HashSet<ModuleDefinition> seenModules) {
       if (moduleDef is null) {
         return type.ToString();
       }
@@ -58,22 +57,29 @@ namespace Microsoft.Dafny {
             return (moduleName == "") ? type.ToString() : (moduleName + "." + type.ToString());
           }
         }
+        foreach (var decl in ModuleDefinition.AllTypeSynonymDecls(moduleDef.TopLevelDecls)) {
+          if (decl.ToString() == type.ToString()) {
+            var moduleName = GetFullModuleName(moduleDef);
+            return (moduleName == "") ? type.ToString() : (moduleName + "." + type.ToString());
+          }
+        }
         foreach (var imp in ModuleDefinition.AllDeclarationsAndNonNullTypeDecls(moduleDef.TopLevelDecls)) {
-          if (imp is ModuleDecl) {
-            var result = GetFullTypeString((imp as ModuleDecl).Signature.ModuleDef, type);
+          if (imp is ModuleDecl && !(imp as ModuleDecl).Signature.IsAbstract) {
+            var result = GetFullTypeString((imp as ModuleDecl).Signature.ModuleDef, type, seenModules);
             if (result != "") {
               return result;
             }
           }
         }
         // couldn't find the type definition here, so we should search the parent
-        return GetFullTypeString(moduleDef.EnclosingModule, type);
+        return GetFullTypeString(moduleDef.EnclosingModule, type, seenModules);
       } else if (type is CollectionType) {
         var ct = type as CollectionType;
         var result = ct.CollectionTypeName + "<";
         var sep = "";
         foreach (var typeArg in ct.TypeArgs) {
-          result += sep + GetFullTypeString(moduleDef, typeArg);
+          seenModules.Clear();
+          result += sep + GetFullTypeString(moduleDef, typeArg, new HashSet<ModuleDefinition>());
           sep = ",";
         }
         result += ">";
@@ -1162,7 +1168,7 @@ namespace Microsoft.Dafny {
     public void PrintType(Type ty) {
       Contract.Requires(ty != null);
       if (ModuleForTypes != null) {
-        wr.Write(GetFullTypeString(ModuleForTypes, ty));
+        wr.Write(GetFullTypeString(ModuleForTypes, ty, new HashSet<ModuleDefinition>()));
       } else {
         wr.Write(ty.TypeName(null, true));
       }
@@ -1176,7 +1182,7 @@ namespace Microsoft.Dafny {
       }
       string s;
       if (ModuleForTypes != null) {
-        s = GetFullTypeString(ModuleForTypes, ty);
+        s = GetFullTypeString(ModuleForTypes, ty, new HashSet<ModuleDefinition>());
       } else {
         s = ty.TypeName(null, true);
       }

@@ -4135,6 +4135,14 @@ namespace Microsoft.Dafny {
       }
     }
 
+    public static IEnumerable<TypeSynonymDecl> AllTypeSynonymDecls(List<TopLevelDecl> declarations) {
+      foreach (var d in declarations) {
+        if (d is TypeSynonymDecl cl) {
+          yield return cl;
+        }
+      }
+    }
+
     /// <summary>
     /// Yields all functions and methods that are members of some type in the given list of
     /// declarations.

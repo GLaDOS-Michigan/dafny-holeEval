@@ -64,13 +64,14 @@ namespace Microsoft.Dafny {
     private static int lemmaForExprValidityLineCount = 0;
 
     private void UpdateCombinationResult(int index) {
-      var requestList = dafnyVerifier.requestsList[index];
-      for (int i = 0; i < requestList.Count; i++) {
-        var request = requestList[i];
+      var CAVRequest = dafnyVerifier.requestsList[index] as CloneAndVerifyRequest;
+      var CAVOutput = dafnyVerifier.dafnyOutput[CAVRequest] as VerificationResponseList;
+      for (int i = 0; i < CAVRequest.RequestsList.Count; i++) {
+        var request = CAVRequest.RequestsList[i];
         var position = dafnyVerifier.requestToPostConditionPosition[request];
         var lemmaStartPosition = dafnyVerifier.requestToLemmaStartPosition[request];
-        var output = dafnyVerifier.dafnyOutput[request];
-        var response = output.Response;
+        var output = CAVOutput.ResponseList[i];
+        var response = output.Response.ToStringUtf8();
         var filePath = output.FileName;
         var execTime = output.ExecutionTimeInMs;
         executionTimes.Add(execTime);
@@ -345,20 +346,24 @@ namespace Microsoft.Dafny {
       for (int i = 0; i < path.Count - 1; i++) {
         var callExpr = path[i + 1].Item2;
         var condExpr = path[i + 1].Item3;
+        var requiresOrAndSep = "requires";
         if (condExpr != null) {
+          if (condExpr is LetExpr) {
+            requiresOrAndSep = "  &&";
+          }
           currentModuleDef = path[i].Item1.EnclosingClass.EnclosingModuleDefinition;
-          res += "  requires " + GetPrefixedString(path[i].Item1.Name + "_", condExpr, currentModuleDef) + "\n";
+          res += $"  {requiresOrAndSep} " + GetPrefixedString(path[i].Item1.Name + "_", condExpr, currentModuleDef) + "\n";
         }
         for (int j = 0; j < callExpr.Args.Count; j++) {
-          res += "  requires ";
+          res += $"  {requiresOrAndSep} ";
           res += GetPrefixedString(path[i].Item1.Name + "_", callExpr.Args[j], currentModuleDef);
           res += " == ";
           res += path[i + 1].Item1.Name + "_" + path[i + 1].Item1.Formals[j].Name + "\n";
         }
         foreach (var req in callExpr.Function.Req) {
-          res += "  requires " + GetPrefixedString(path[i + 1].Item1.Name + "_", req.E, currentModuleDef) + "\n";
+          res += $"  {requiresOrAndSep} " + GetPrefixedString(path[i + 1].Item1.Name + "_", req.E, currentModuleDef) + "\n";
         }
-        res += "  requires " + callExpr.Function.FullDafnyName + "(";
+        res += $"  {requiresOrAndSep} " + callExpr.Function.FullDafnyName + "(";
         sep = "";
         foreach (var arg in callExpr.Args) {
           res += sep + GetPrefixedString(path[i].Item1.Name + "_", arg, currentModuleDef);
@@ -515,7 +520,7 @@ namespace Microsoft.Dafny {
         constraintFuncLineCount = constraintFuncCode.Count(f => (f == '\n'));
       }
       
-      lemmaForExprValidityString = GetValidityLemma(Paths[0], null, constraintExpr.expr, -1);
+      lemmaForExprValidityString = GetValidityLemma(Paths[0], null, constraintExpr == null ? null : constraintExpr.expr, -1);
       lemmaForExprValidityLineCount = lemmaForExprValidityString.Count(f => (f == '\n'));
 
       for (int i = 0; i < expressionFinder.availableExpressions.Count; i++) {
@@ -697,50 +702,6 @@ namespace Microsoft.Dafny {
       return "";
     }
 
-    public static string GetFullTypeString(ModuleDefinition moduleDef, Type type) {
-      if (moduleDef is null) {
-        return type.ToString();
-      }
-      if (type is UserDefinedType) {
-        var udt = type as UserDefinedType;
-        if (udt.Name == "nat" || udt.Name == "object?")
-          return udt.ToString();
-        foreach (var decl in moduleDef.TopLevelDecls) {
-          if (decl.ToString() == type.ToString()) {
-            var moduleName = GetFullModuleName(moduleDef);
-            return (moduleName == "") ? type.ToString() : (moduleName + "." + type.ToString());
-          }
-        }
-        if (moduleDef.Name != "_module") {
-          foreach (var imp in ModuleDefinition.AllDeclarationsAndNonNullTypeDecls(moduleDef.TopLevelDecls)) {
-            if (imp is ModuleDecl) {
-              var result = GetFullTypeString((imp as ModuleDecl).Signature.ModuleDef, type);
-              if (result != "") {
-                return result;
-              }
-            }
-          }
-        }
-        // couldn't find the type definition here, so we should search the parent
-        if (moduleDef.EnclosingModule != moduleDef) {
-          return GetFullTypeString(moduleDef.EnclosingModule, type);
-        } else {
-          return type.ToString();
-        }
-      } else if (type is CollectionType) {
-        var ct = type as CollectionType;
-        var result = ct.CollectionTypeName + "<";
-        var sep = "";
-        foreach (var typeArg in ct.TypeArgs) {
-          result += sep + GetFullTypeString(moduleDef, typeArg);
-          sep = ",";
-        }
-        result += ">";
-        return result;
-      } else {
-        return type.ToString();
-      }
-    }
 
     public static Tuple<string, string> GetFunctionParamList(Function func, string namePrefix = "") {
       var funcName = func.FullDafnyName;
@@ -748,7 +709,7 @@ namespace Microsoft.Dafny {
       string paramNames = "";
       var sep = "";
       foreach (var param in func.Formals) {
-        parameterNameTypes += sep + namePrefix + param.Name + ":" + GetFullTypeString(func.EnclosingClass.EnclosingModuleDefinition, param.Type);
+        parameterNameTypes += sep + namePrefix + param.Name + ":" + Printer.GetFullTypeString(func.EnclosingClass.EnclosingModuleDefinition, param.Type, new HashSet<ModuleDefinition>());
         paramNames += sep + namePrefix + param.Name;
         sep = ", ";
       }
@@ -833,6 +794,8 @@ namespace Microsoft.Dafny {
       int lemmaForExprValidityPosition = -1;
       int lemmaForExprValidityStartPosition = -1;
 
+      var requestList = new List<VerificationRequest>();
+
       var workingDir = $"{DafnyOptions.O.HoleEvaluatorWorkingDirectory}/{funcName}_{cnt}";
       if (tasksList == null) {
         string code = "";
@@ -862,12 +825,12 @@ namespace Microsoft.Dafny {
           }
         }
         args.Add("/exitAfterFirstError");
-        dafnyVerifier.runDafny(code, args,
-            exprDepth, cnt, lemmaForExprValidityPosition, lemmaForExprValidityStartPosition, "");
+        requestList.Add(dafnyVerifier.GetVerificationRequest(code, args,
+            exprDepth, cnt, lemmaForExprValidityPosition, lemmaForExprValidityStartPosition, ""));
       } else {
         var changingFilePath = includeParser.Normalized(workingFunc.BodyStartTok.filename);
-        var constraintFuncChangingFilePath = includeParser.Normalized(workingConstraintFunc.BodyStartTok.filename);
-        var remoteFolderPath = dafnyVerifier.DuplicateAllFiles(cnt, changingFilePath);
+        string constraintFuncChangingFilePath = "";
+        // var remoteFolderPath = dafnyVerifier.DuplicateAllFiles(cnt, changingFilePath);
 
         var clonedWorkingFunc = cloner.CloneFunction(workingFunc);
         if (exprDepth.expr.HasCardinality) {
@@ -883,37 +846,43 @@ namespace Microsoft.Dafny {
         var newCode = String.Join('\n', mergedCode);
 
         if (constraintFuncCode != "") {
+          constraintFuncChangingFilePath = includeParser.Normalized(workingConstraintFunc.BodyStartTok.filename);
           lemmaForExprValidityStartPosition = constraintFuncLineCount + 2;
           var newBaseCode = constraintFuncCode + "\n" + lemmaForExprValidityString;
           lemmaForExprValidityPosition = lemmaForExprValidityStartPosition + lemmaForExprValidityLineCount;
-          dafnyVerifier.runDafny(newBaseCode, tasksListDictionary[constraintFuncChangingFilePath].Arguments.ToList(),
-              exprDepth, cnt, lemmaForExprValidityPosition, lemmaForExprValidityStartPosition,
-              $"{remoteFolderPath.Path}/{constraintFuncChangingFilePath}");
+          requestList.Add(dafnyVerifier.GetVerificationRequest(
+            newBaseCode, tasksListDictionary[constraintFuncChangingFilePath].Arguments.ToList(),
+            exprDepth, cnt, lemmaForExprValidityPosition, lemmaForExprValidityStartPosition,
+            constraintFuncChangingFilePath));
 
-          dafnyVerifier.runDafny(newCode, tasksListDictionary[changingFilePath].Arguments.ToList(),
-              exprDepth, cnt, -1, -1, $"{remoteFolderPath.Path}/{changingFilePath}");
+          requestList.Add(dafnyVerifier.GetVerificationRequest(
+            newCode, tasksListDictionary[changingFilePath].Arguments.ToList(),
+            exprDepth, cnt, -1, -1, changingFilePath));
         } else {
           var newCodeLineCount = newCode.Count(f => (f == '\n'));
           lemmaForExprValidityStartPosition = newCodeLineCount + 2;
           newCode += "\n" + lemmaForExprValidityString;
           lemmaForExprValidityPosition = newCodeLineCount + lemmaForExprValidityLineCount;
-          dafnyVerifier.runDafny(newCode, tasksListDictionary[changingFilePath].Arguments.ToList(),
-              exprDepth, cnt, lemmaForExprValidityPosition, lemmaForExprValidityStartPosition,
-              $"{remoteFolderPath.Path}/{changingFilePath}");
+          requestList.Add(dafnyVerifier.GetVerificationRequest(
+            newCode, tasksListDictionary[changingFilePath].Arguments.ToList(),
+            exprDepth, cnt, lemmaForExprValidityPosition, lemmaForExprValidityStartPosition,
+            changingFilePath));
         }
 
         // File.WriteAllTextAsync($"{workingDir}/{changingFilePath}", newCode);
         foreach (var f in affectedFiles) {
           if (f != changingFilePath && f != constraintFuncChangingFilePath) {
             // var code = File.ReadAllLines($"{workingDir}/{f}");
-            dafnyVerifier.runDafny("", tasksListDictionary[f].Arguments.ToList(),
-              exprDepth, cnt, -1, -1, $"{remoteFolderPath.Path}/{f}");
+            requestList.Add(dafnyVerifier.GetVerificationRequest(
+              "", tasksListDictionary[f].Arguments.ToList(),
+              exprDepth, cnt, -1, -1, f));
           // } else {
             // dafnyVerifier.runDafny(String.Join('\n', code), tasksListDictionary[f].Arguments.ToList(),
             //   expr, cnt, lemmaForExprValidityPosition, lemmaForExprValidityStartPosition);
           }
         }
       }
+      dafnyVerifier.runDafny(requestList, exprDepth, cnt);
     }
 
     public void PrintImplies(Program program, Function func, int availableExprAIndex, int availableExprBIndex) {

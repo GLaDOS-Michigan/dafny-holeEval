@@ -177,6 +177,7 @@ namespace Microsoft.Dafny {
     }
 
     public IEnumerable<ExpressionDepth> ExtendInSeqExpressions(IEnumerable<ExpressionDepth> expressionList) {
+      int maxEvalDepth = DafnyOptions.O.HoleEvaluatorExpressionDepth;
       foreach (var exprDepth in expressionList) {
         yield return exprDepth;
       }
@@ -190,7 +191,13 @@ namespace Microsoft.Dafny {
           collectionElementType = LemmaFinder.SubstituteTypeWithSynonyms(collectionElementType);
           if (typeToExpressionDict.ContainsKey(collectionElementType.ToString())) {
             foreach (var elem in typeToExpressionDict[collectionElementType.ToString()]) {
+              if (elem.depth + 1 > maxEvalDepth) {
+                continue;
+              }
               foreach (var collection in exprHashSet) {
+                if (collection.depth + 1 > maxEvalDepth) {
+                   continue;
+                }
                 if (!(collection.expr is FunctionCallExpr)) {
                   var InExpr = new BinaryExpr(elem.expr.tok, BinaryExpr.Opcode.In, elem.expr, collection.expr);
                     InExpr.Type = Type.Bool;
@@ -205,6 +212,7 @@ namespace Microsoft.Dafny {
 
     public IEnumerable<ExpressionDepth> ExtendSeqSelectExpressions(IEnumerable<ExpressionDepth> expressionList) {
       // Console.WriteLine("here");
+      int maxEvalDepth = DafnyOptions.O.HoleEvaluatorExpressionDepth;
       foreach (var exprDepth in expressionList) {
         yield return exprDepth;
       }
@@ -216,9 +224,15 @@ namespace Microsoft.Dafny {
           if (firstElem.expr.Type is SeqType) {
             var seqVarHashSet = typeToExpressionDict[type];
             foreach (var seqVar in seqVarHashSet) {
+              if (seqVar.depth + 1 > maxEvalDepth) {
+                continue;
+              }
             // for (int i = 0; i < seqVarList.Count; i++) {
               // var seqVar = seqVarList[i];
               foreach (var intVar in intVarHashSet) {
+                if (intVar.depth + 1 > maxEvalDepth) {
+                  continue;
+                }
               // for (int j = 0; j < intVarList.Count; j++) {
                 var seqSelectExpr = new SeqSelectExpr(seqVar.expr.tok, true, seqVar.expr, intVar.expr, null);
                 seqSelectExpr.Type = (seqVar.expr.Type as SeqType).Arg;
@@ -236,9 +250,15 @@ namespace Microsoft.Dafny {
       Contract.Requires(availableExpressions.Count == 0);
       var expressions = ListArguments(program, desiredFunction);
       var extendedSeqSelectExpressions = ExtendSeqSelectExpressions(expressions);
-      var extendedFunctionInvocationsExpressions = ExtendFunctionInvocationExpressions(program, extendedSeqSelectExpressions);
-      var extendedExpressions = ExtendInSeqExpressions(extendedFunctionInvocationsExpressions);
-      CalcDepthOneAvailableExpresssions(program, desiredFunction, extendedExpressions);
+      if (DafnyOptions.O.HoleEvaluatorIncludeFunctionInvocations) {
+        var extendedFunctionInvocationsExpressions = ExtendFunctionInvocationExpressions(program, extendedSeqSelectExpressions);
+        var extendedExpressions = ExtendInSeqExpressions(extendedFunctionInvocationsExpressions);
+        CalcDepthOneAvailableExpresssions(program, desiredFunction, extendedExpressions);
+      }
+      else {
+        var extendedExpressions = ExtendInSeqExpressions(extendedSeqSelectExpressions);
+        CalcDepthOneAvailableExpresssions(program, desiredFunction, extendedExpressions);
+      }
     }
 
     public void CalcDepthOneAvailableExpresssionsFromLemma(Program program, Lemma desiredLemma) {
@@ -372,6 +392,10 @@ namespace Microsoft.Dafny {
                 negateOfExpressionIndex[availableExpressions.Count - 2] = availableExpressions.Count - 1;
               }
 
+              // only check < <= => > for int and nat types
+              if (k != "int" && k != "nat") {
+                continue;
+              }
               // Lower than
               {
                 var lowerThanExpr = Expression.CreateLess(values[i].expr, values[j].expr);

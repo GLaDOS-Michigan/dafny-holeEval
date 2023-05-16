@@ -56,18 +56,19 @@ namespace Microsoft.Dafny {
     }
 
     private void UpdateCombinationResult(int index) {
-      // throw new NotImplementedException("need to rewrite the following based on the changes in dafnyVerifier");
       if (!dafnyVerifier.requestsList.ContainsKey(index)) {
         combinationResults[index] = Result.NoMatchingTrigger;
         return;
       }
-      var request = dafnyVerifier.requestsList[index];
-      var output = dafnyVerifier.dafnyOutput[request[0]];
+      var CAVRequest = dafnyVerifier.requestsList[index] as CloneAndVerifyRequest;
+      var CAVOutput = dafnyVerifier.dafnyOutput[CAVRequest] as VerificationResponseList;
+      var request = CAVRequest.RequestsList[0];
+      var output = CAVOutput.ResponseList[0];
       if (output.ExecutionTimeInMs == 0) {
         combinationResults[index] = Result.NotRunningDueToAlreadyCorrectCode;
         return;
       }
-      var response = output.Response;
+      var response = output.Response.ToStringUtf8();
       var filePath = output.FileName;
       var execTime = output.ExecutionTimeInMs;
       executionTimes.Add(execTime);
@@ -81,7 +82,7 @@ namespace Microsoft.Dafny {
         // Console.WriteLine(p.StartInfo.Arguments);
         var str = "";
         var sep = "";
-        foreach (var stmtExpr in dafnyVerifier.requestToStmtExprList[request[0]]) {
+        foreach (var stmtExpr in dafnyVerifier.requestToStmtExprList[request]) {
           if (stmtExpr.Expr != null) {
             str += sep + Printer.ExprToString(stmtExpr.Expr);
           } else {
@@ -739,7 +740,7 @@ namespace Microsoft.Dafny {
       // if that is a correct predicate, it means the proof already 
       // goes through and no additional conjunction is needed.
       if (combinationResults[0] == Result.CorrectProof || combinationResults[0] == Result.CorrectProofByTimeout) {
-        Console.WriteLine(dafnyVerifier.dafnyOutput[dafnyVerifier.requestsList[0][0]].ToString());
+        Console.WriteLine(dafnyVerifier.dafnyOutput[dafnyVerifier.requestsList[0]].ToString());
         Console.WriteLine("proof already goes through!");
         return true;
       }
@@ -810,10 +811,14 @@ namespace Microsoft.Dafny {
       //   workingLemma.Body.Body.RemoveAt(0);
       // }
 
-      dafnyVerifier.runDafnyProofCheck(newCode, tasksListDictionary[changingFilePath].Arguments.ToList(),
+      var VRequest = dafnyVerifier.GetVerificationRequestForProof(
+        newCode, tasksListDictionary[changingFilePath].Arguments.ToList(),
               exprStmtList, cnt, changingFilePath,
-              workingLemma.FullSanitizedName,
+              workingLemma.FullDafnyName,
               workingLemmaTimelimitMultiplier);
+      var requestList = new List<VerificationRequest>();
+      requestList.Add(VRequest);
+      dafnyVerifier.runDafny(requestList, exprStmtList, cnt);
     }
   }
 }
