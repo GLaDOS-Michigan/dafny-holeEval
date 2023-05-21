@@ -66,6 +66,8 @@ namespace Microsoft.Dafny {
     private void UpdateCombinationResult(int index) {
       var CAVRequest = dafnyVerifier.requestsList[index] as CloneAndVerifyRequest;
       var CAVOutput = dafnyVerifier.dafnyOutput[CAVRequest] as VerificationResponseList;
+      var execTime = CAVOutput.ExecutionTimeInMs;
+      executionTimes.Add(execTime);
       for (int i = 0; i < CAVRequest.RequestsList.Count; i++) {
         var request = CAVRequest.RequestsList[i];
         var position = dafnyVerifier.requestToPostConditionPosition[request];
@@ -73,8 +75,6 @@ namespace Microsoft.Dafny {
         var output = CAVOutput.ResponseList[i];
         var response = output.Response.ToStringUtf8();
         var filePath = output.FileName;
-        var execTime = output.ExecutionTimeInMs;
-        executionTimes.Add(execTime);
         Result res;
         if (position != -1) {
           var expectedOutput =

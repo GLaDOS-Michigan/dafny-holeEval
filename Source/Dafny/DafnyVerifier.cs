@@ -247,7 +247,14 @@ namespace Microsoft.Dafny {
               if (requestToCnt[request] % 100 == 0) {
                 Console.WriteLine($"finished await for #{requestToCnt[request]}");
               }
-              output = response.ToString();
+              if (DafnyOptions.O.HoleEvaluatorDumpOutput) {
+                output = response.ToString();
+                await File.WriteAllTextAsync($"{DafnyOptions.O.HoleEvaluatorWorkingDirectory}{requestToCnt[request]}_0.txt",
+                  request.ToString());
+                await File.WriteAllTextAsync($"{DafnyOptions.O.HoleEvaluatorWorkingDirectory}{OutputPrefix}_{requestToCnt[request]}_0.txt",
+                  (requestToExpr.ContainsKey(request) ? "// " + Printer.ExprToString(requestToExpr[request]) + "\n" : "") +
+                  (requestToCnt.ContainsKey(request) ? "// " + requestToCnt[request] + "\n" : "") + output + "\n");
+              }
               // CheckIfCorrectAnswer(request, response);
               dafnyOutput[request] = response;
             }
@@ -258,17 +265,21 @@ namespace Microsoft.Dafny {
               // Console.WriteLine($"calling await for #{requestToCnt[request]}");
               VerificationResponseList response = await CAVRequestToCall[request];
               // Console.WriteLine($"finished await for #{requestToCnt[request]}");
-              output = response.ToString();
+              if (DafnyOptions.O.HoleEvaluatorDumpOutput) {
+                output = $"{response.ExecutionTimeInMs.ToString()}\n";
+                for (int i = 0; i < response.ResponseList.Count; i++) {
+                  output = output + $"{i}:\t{response.ResponseList[i].Response.ToStringUtf8()}\n";
+                }
+                await File.WriteAllTextAsync($"{DafnyOptions.O.HoleEvaluatorWorkingDirectory}{requestToCnt[request]}_0.txt",
+                request.ToString());
+                await File.WriteAllTextAsync($"{DafnyOptions.O.HoleEvaluatorWorkingDirectory}{OutputPrefix}_{requestToCnt[request]}_0.txt",
+                  (requestToExpr.ContainsKey(request) ? "// " + Printer.ExprToString(requestToExpr[request]) + "\n" : "") +
+                  (requestToCnt.ContainsKey(request) ? "// " + requestToCnt[request] + "\n" : "") + output + "\n");
+              }
               // CheckIfCorrectAnswer(request, response);
               dafnyOutput[request] = response;
             }
-            if (DafnyOptions.O.HoleEvaluatorDumpOutput) {
-              await File.WriteAllTextAsync($"{DafnyOptions.O.HoleEvaluatorWorkingDirectory}{requestToCnt[request]}_0.txt",
-                request.ToString());
-              await File.WriteAllTextAsync($"{DafnyOptions.O.HoleEvaluatorWorkingDirectory}{OutputPrefix}_{requestToCnt[request]}_0.txt",
-                (requestToExpr.ContainsKey(request) ? "// " + Printer.ExprToString(requestToExpr[request]) + "\n" : "") +
-                (requestToCnt.ContainsKey(request) ? "// " + requestToCnt[request] + "\n" : "") + output + "\n");
-            }
+            
             // Console.WriteLine($"finish executing {requestToCnt[request]}");
           } catch (RpcException ex) {
             Console.WriteLine($"{sw.ElapsedMilliseconds / 1000}:: Restarting task #{requestToCnt[request]} {ex.Message}");
