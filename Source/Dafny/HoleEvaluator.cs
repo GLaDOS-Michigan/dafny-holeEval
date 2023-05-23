@@ -258,8 +258,8 @@ namespace Microsoft.Dafny {
               new BoundVar(bv.Tok, currExprCondParentTuple.Item3.Name + "_" + bv.Name, bv.Type)));
           }
           rhss.Add(existsExpr.Term);
-          var cond = Expression.CreateLet(existsExpr.BodyStartTok, lhss, rhss,
-            Expression.CreateBoolLiteral(existsExpr.BodyStartTok, true), false);
+          var cond = Expression.CreateAnd(existsExpr, Expression.CreateLet(existsExpr.BodyStartTok, lhss, rhss,
+            Expression.CreateBoolLiteral(existsExpr.BodyStartTok, true), false));
 
           queue.Enqueue(new Tuple<Expression, Expression, Function>(existsExpr.Term, cond, currExprCondParentTuple.Item3));
           G.AddVertex(currExprCondParentTuple.Item3);
@@ -348,7 +348,7 @@ namespace Microsoft.Dafny {
         var condExpr = path[i + 1].Item3;
         var requiresOrAndSep = "requires";
         if (condExpr != null) {
-          if (condExpr is LetExpr) {
+          if (condExpr is BinaryExpr && (condExpr as BinaryExpr).E1 is LetExpr) {
             requiresOrAndSep = "  &&";
           }
           currentModuleDef = path[i].Item1.EnclosingClass.EnclosingModuleDefinition;
