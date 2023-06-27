@@ -26,7 +26,8 @@ namespace Microsoft.Dafny {
     FalsePredicate = 4,
     InvalidExpr = 5,
     NoMatchingTrigger = 6,
-    NotRunningDueToAlreadyCorrectCode = 7
+    NotRunningDueToAlreadyCorrectCode = 7,
+    CorrectProofWithoutMaintainGuarantee = 8
   }
   public class HoleEvaluator {
     private string UnderscoreStr = "";
@@ -62,6 +63,38 @@ namespace Microsoft.Dafny {
     public static int validityLemmaNameStartCol = 0;
     public static string lemmaForExprValidityString = "";
     private static int lemmaForExprValidityLineCount = 0;
+    public static string lemmaForMaintainabilityString = "";
+    private static int lemmaForMaintainabilityLineCount = 0;
+
+    private void UpdateCombinationResultForMaintainStateLemma(int originalExprIndex, int index) {
+      var CAVRequest = dafnyVerifier.requestsList[index] as CloneAndVerifyRequest;
+      var CAVOutput = dafnyVerifier.dafnyOutput[CAVRequest] as VerificationResponseList;
+      var execTime = CAVOutput.ExecutionTimeInMs;
+      executionTimes.Add(execTime);
+      for (int i = 0; i < CAVRequest.RequestsList.Count; i++) {
+        var request = CAVRequest.RequestsList[i];
+        if (request.Arguments.Count == 0) {
+          continue;
+        }
+        var position = dafnyVerifier.requestToPostConditionPosition[request];
+        var lemmaStartPosition = dafnyVerifier.requestToLemmaStartPosition[request];
+        var output = CAVOutput.ResponseList[i];
+        var response = output.Response.ToStringUtf8();
+        var filePath = output.FileName;
+        if (DafnyOptions.O.HoleEvaluatorVerboseMode) {
+          Console.WriteLine($"{originalExprIndex} output for maintain lemma:\n{response}");
+        }
+        Result res = DafnyVerifierClient.IsCorrectOutputForNoErrors(response);
+        if (res == Result.CorrectProof) {
+          combinationResults[originalExprIndex] = res;
+        }
+        else {
+          combinationResults[originalExprIndex] = Result.CorrectProofWithoutMaintainGuarantee;
+        }
+        break;
+      }
+      expressionFinder.combinationResults[originalExprIndex] = combinationResults[originalExprIndex];
+    }
 
     private void UpdateCombinationResult(int index) {
       var CAVRequest = dafnyVerifier.requestsList[index] as CloneAndVerifyRequest;
@@ -70,6 +103,9 @@ namespace Microsoft.Dafny {
       executionTimes.Add(execTime);
       for (int i = 0; i < CAVRequest.RequestsList.Count; i++) {
         var request = CAVRequest.RequestsList[i];
+        if (request.Arguments.Count == 0) {
+          continue;
+        }
         var position = dafnyVerifier.requestToPostConditionPosition[request];
         var lemmaStartPosition = dafnyVerifier.requestToLemmaStartPosition[request];
         var output = CAVOutput.ResponseList[i];
@@ -254,8 +290,10 @@ namespace Microsoft.Dafny {
           var lhss = new List<CasePattern<BoundVar>>();
           var rhss = new List<Expression>();
           foreach (var bv in existsExpr.BoundVars) {
+            // lhss.Add(new CasePattern<BoundVar>(bv.Tok,
+            //   new BoundVar(bv.Tok, currExprCondParentTuple.Item3.Name + "_" + bv.Name, bv.Type)));
             lhss.Add(new CasePattern<BoundVar>(bv.Tok,
-              new BoundVar(bv.Tok, currExprCondParentTuple.Item3.Name + "_" + bv.Name, bv.Type)));
+              new BoundVar(bv.Tok, bv.Name, bv.Type)));
           }
           rhss.Add(existsExpr.Term);
           var cond = Expression.CreateAnd(existsExpr, Expression.CreateLet(existsExpr.BodyStartTok, lhss, rhss,
@@ -306,14 +344,159 @@ namespace Microsoft.Dafny {
       }
     }
 
-    public static string GetPrefixedString(string prefix, Expression expr, ModuleDefinition currentModuleDef) {
+    public static string GetPrefixedString(string prefix, Expression expr, ModuleDefinition currentModuleDef, Dictionary<string, string> changedPredicatesDict = null) {
       using (var wr = new System.IO.StringWriter()) {
         var pr = new Printer(wr);
+        // pr.UniqueStringBeforeUnderscore = UnderscoreStr;
         pr.Prefix = prefix;
+        pr.ChangedPredicatesDict = changedPredicatesDict;
         pr.ModuleForTypes = currentModuleDef;
         pr.PrintExpression(expr, false);
         return wr.ToString();
       }
+    }
+
+    public static string GetPrefixedString(string prefix, string name) {
+      var strSplit = name.Split('.');
+      strSplit[strSplit.Length - 1] = prefix + strSplit[strSplit.Length - 1];
+      return strSplit.Concat(".");
+    }
+
+    public static Dictionary<string, string> ChangedPredicatesDictionary = new Dictionary<string, string>();
+
+    public static string GetMaintainabilityLemma(List<Tuple<Function, FunctionCallExpr, Expression>> path, Expression constraintExpr, ModuleDefinition currentModuleDef)
+    {
+      Contract.Requires(constraintExpr != null);
+      string res = "lemma {:timeLimitMultiplier 2} maintainCheck";
+      foreach (var nwPair in path) {
+        res += "_" + nwPair.Item1.Name;
+      }
+      res += "(";
+      var sep = "";
+      var newParamLists = new List<Tuple<List<string>, string>>();
+      var oldParamLists = new List<Tuple<List<string>, string>>();
+      // function params for new one
+      foreach (var nwPair in path) {
+        res += sep + "\n    ";
+        var paramList = GetFunctionParamList(nwPair.Item1, nwPair.Item1.Name + "_");
+        res += paramList.Item2;
+        newParamLists.Add(paramList);
+        sep = ", ";
+      }
+      // function params for old one
+      foreach (var nwPair in path) {
+        res += sep + "\n    ";
+        var paramList = GetFunctionParamList(nwPair.Item1, "old_" + nwPair.Item1.Name + "_");
+        res += paramList.Item2;
+        oldParamLists.Add(paramList);
+        sep = ", ";
+      }
+      res += ")\n";
+
+      // // print equality between param lists
+      res += "\n  // requires equality between new and old arguments\n";
+      for (int i = 0; i < newParamLists.Count; i++) {
+        for (int j = 0; j < newParamLists[i].Item1.Count; j++) {
+          res += "  requires " + newParamLists[i].Item1[j] + " == " + oldParamLists[i].Item1[j] + "\n";
+        }
+      }
+
+      for (int i = 0; i < path.Count; i++) {
+        ChangedPredicatesDictionary.Add(path[i].Item1.FullDafnyName, GetPrefixedString("old_", path[i].Item1.FullDafnyName));
+      }
+      res += "\n  // requires Next(old_s, old_s')\n";
+      // print path[0] for old one
+      foreach (var req in path[0].Item1.Req) {
+        res += "  requires " + GetPrefixedString("old_" + path[0].Item1.Name + "_", req.E, currentModuleDef) + "\n";
+      }
+      res += "  requires " + GetPrefixedString("old_", path[0].Item1.FullDafnyName) + "(";
+      sep = "";
+      foreach (var formal in path[0].Item1.Formals) {
+        res += sep + "old_" + path[0].Item1.Name + "_" + formal.Name;
+        sep = ", ";
+      }
+      res += ")\n";
+
+      // print rest for old one
+      for (int i = 0; i < path.Count - 1; i++) {
+        var callExpr = path[i + 1].Item2;
+        var condExpr = path[i + 1].Item3;
+        var requiresOrAndSep = "requires";
+        if (condExpr != null) {
+          if (condExpr is BinaryExpr && (condExpr as BinaryExpr).E1 is LetExpr) {
+            requiresOrAndSep = "  &&";
+          }
+          currentModuleDef = path[i].Item1.EnclosingClass.EnclosingModuleDefinition;
+          res += $"  {requiresOrAndSep} " + GetPrefixedString("old_" + path[i].Item1.Name + "_", condExpr, currentModuleDef, ChangedPredicatesDictionary) + "\n";
+        }
+        for (int j = 0; j < callExpr.Args.Count; j++) {
+          res += $"  {requiresOrAndSep} ";
+          res += GetPrefixedString("old_" + path[i].Item1.Name + "_", callExpr.Args[j], currentModuleDef, ChangedPredicatesDictionary);
+          res += " == ";
+          res += "old_" + path[i + 1].Item1.Name + "_" + path[i + 1].Item1.Formals[j].Name + "\n";
+        }
+        foreach (var req in callExpr.Function.Req) {
+          res += $"  {requiresOrAndSep} " + GetPrefixedString("old_" + path[i + 1].Item1.Name + "_", req.E, currentModuleDef) + "\n";
+        }
+        res += $"  {requiresOrAndSep} " + GetPrefixedString("old_", callExpr.Function.FullDafnyName) + "(";
+        sep = "";
+        foreach (var arg in callExpr.Args) {
+          res += sep + GetPrefixedString("old_" + path[i].Item1.Name + "_", arg, currentModuleDef);
+          sep = ", ";
+        }
+        res += ")\n";
+      }
+
+      res += "\n  // requires Inv(old_s) && Inv(old_s')\n";
+      currentModuleDef = path[0].Item1.EnclosingClass.EnclosingModuleDefinition;
+      res += "  requires " + GetPrefixedString("old_" + path[0].Item1.Name + "_", constraintExpr, currentModuleDef) + "\n";
+      res += "\n  // requires Inv(s) && Inv(s')\n";
+      res += "  requires " + GetPrefixedString(path[0].Item1.Name + "_", constraintExpr, currentModuleDef) + "\n";
+
+      res += "\n  // ensures Next(s, s') in reverse order\n";
+      // print rest for new one (in reverse order)
+      for (int i = path.Count - 2; i >= 0; i--) {
+        var callExpr = path[i + 1].Item2;
+        var condExpr = path[i + 1].Item3;
+        var requiresOrAndSep = "ensures";
+        if (condExpr != null) {
+          if (condExpr is BinaryExpr && (condExpr as BinaryExpr).E1 is LetExpr) {
+            requiresOrAndSep = "  &&";
+          }
+          currentModuleDef = path[i].Item1.EnclosingClass.EnclosingModuleDefinition;
+          res += $"  {requiresOrAndSep} " + GetPrefixedString(path[i].Item1.Name + "_", condExpr, currentModuleDef) + "\n";
+        }
+        for (int j = 0; j < callExpr.Args.Count; j++) {
+          res += $"  {requiresOrAndSep} ";
+          res += GetPrefixedString(path[i].Item1.Name + "_", callExpr.Args[j], currentModuleDef);
+          res += " == ";
+          res += path[i + 1].Item1.Name + "_" + path[i + 1].Item1.Formals[j].Name + "\n";
+        }
+        foreach (var req in callExpr.Function.Req) {
+          res += $"  {requiresOrAndSep} " + GetPrefixedString(path[i + 1].Item1.Name + "_", req.E, currentModuleDef) + "\n";
+        }
+        res += $"  {requiresOrAndSep} " + callExpr.Function.FullDafnyName + "(";
+        sep = "";
+        foreach (var arg in callExpr.Args) {
+          res += sep + GetPrefixedString(path[i].Item1.Name + "_", arg, currentModuleDef);
+          sep = ", ";
+        }
+        res += ")\n";
+      }
+      // print path[0] for new one
+      foreach (var req in path[0].Item1.Req) {
+        res += "  ensures " + GetPrefixedString(path[0].Item1.Name + "_", req.E, currentModuleDef) + "\n";
+      }
+      res += "  ensures " + path[0].Item1.FullDafnyName + "(";
+      sep = "";
+      foreach (var formal in path[0].Item1.Formals) {
+        res += sep + path[0].Item1.Name + "_" + formal.Name;
+        sep = ", ";
+      }
+      res += ")\n";
+      res += "{}\n";
+
+      return res;
     }
 
     public static string GetValidityLemma(List<Tuple<Function, FunctionCallExpr, Expression>> path, ModuleDefinition currentModuleDef, Expression constraintExpr, int cnt) {
@@ -523,6 +706,9 @@ namespace Microsoft.Dafny {
       lemmaForExprValidityString = GetValidityLemma(Paths[0], null, constraintExpr == null ? null : constraintExpr.expr, -1);
       lemmaForExprValidityLineCount = lemmaForExprValidityString.Count(f => (f == '\n'));
 
+      lemmaForMaintainabilityString = GetMaintainabilityLemma(Paths[0], constraintExpr == null ? null : constraintExpr.expr, null);
+      lemmaForMaintainabilityLineCount = lemmaForMaintainabilityString.Count(f => (f == '\n'));
+
       for (int i = 0; i < expressionFinder.availableExpressions.Count; i++) {
       // for (int i = 0; i < 100; i++) {
         PrintExprAndCreateProcess(unresolvedProgram, expressionFinder.availableExpressions[i], i);
@@ -532,7 +718,6 @@ namespace Microsoft.Dafny {
       await dafnyVerifier.startProofTasksAccordingToPriority();
       Console.WriteLine($"{dafnyVerifier.sw.ElapsedMilliseconds / 1000}:: finish exploring");
 
-      dafnyVerifier.Cleanup();
       // bool foundCorrectExpr = false;
       
       for (int i = 0; i < expressionFinder.availableExpressions.Count; i++) {
@@ -557,9 +742,24 @@ namespace Microsoft.Dafny {
           UpdateCombinationResult(i);
         }
       }
-      Console.WriteLine($"{dafnyVerifier.sw.ElapsedMilliseconds / 1000}:: finish exploring, try to calculate implies graph");
+      Console.WriteLine($"{dafnyVerifier.sw.ElapsedMilliseconds / 1000}:: finish exploring, try to check maintain state lemma");
+      var passingProof = new List<int>();
+      dafnyVerifier.RestartConsumers();
+      for (int i = 0; i < expressionFinder.availableExpressions.Count; i++) {
+        if (combinationResults[i] == Result.CorrectProof || combinationResults[i] == Result.CorrectProof) {
+          var expr = expressionFinder.availableExpressions[i];
+          CheckMaintainState(unresolvedProgram, expr, expressionFinder.availableExpressions.Count + passingProof.Count);
+          passingProof.Add(i);
+        }
+      }
+      await dafnyVerifier.startProofTasksAccordingToPriority();
+      dafnyVerifier.Cleanup();
+      for (int i = 0; i < passingProof.Count; i++) {
+        UpdateCombinationResultForMaintainStateLemma(passingProof[i], i + expressionFinder.availableExpressions.Count);
+      }
       int correctProofCount = 0;
       int correctProofByTimeoutCount = 0;
+      int correctProofWithoutMaintainCount = 0;
       int incorrectProofCount = 0;
       int invalidExprCount = 0;
       int falsePredicateCount = 0;
@@ -573,6 +773,10 @@ namespace Microsoft.Dafny {
             Console.WriteLine($"correct answer: {i} {Printer.ExprToString(expressionFinder.availableExpressions[i].expr)}");
             correctProofCount++; 
             break;
+          case Result.CorrectProofWithoutMaintainGuarantee:
+            Console.WriteLine($"correct answer but not passing maintain guarantee: {i} {Printer.ExprToString(expressionFinder.availableExpressions[i].expr)}");
+            correctProofWithoutMaintainCount++; 
+            break;
           case Result.CorrectProofByTimeout: 
             Console.WriteLine($"correct answer by timeout: {i}");
             correctProofByTimeoutCount++; 
@@ -583,10 +787,10 @@ namespace Microsoft.Dafny {
         }
       }
       Console.WriteLine("{0,-15} {1,-15} {2,-15} {3,-15} {4, -25} {5, -15} {6, -15}",
-        "InvalidExpr", "IncorrectProof", "FalsePredicate", "CorrectProof", "CorrectProofByTimeout", "NoMatchingTrigger", "Total");
-      Console.WriteLine("{0,-15} {1,-15} {2,-15} {3,-15} {4, -25} {5, -15} {6, -15}",
+        "InvalidExpr", "IncorrectProof", "TriviallyCorrect", "CorrectProof", "CorrectProofByTimeout", "CorrectProofWOMaintain", "NoMatchingTrigger", "Total");
+      Console.WriteLine("{0,-15} {1,-15} {2,-15} {3,-15} {4, -25} {5, -25} {6, -15} {7, -15}",
         invalidExprCount, incorrectProofCount, falsePredicateCount, correctProofCount, correctProofByTimeoutCount,
-        noMatchingTriggerCount, expressionFinder.availableExpressions.Count);
+        correctProofWithoutMaintainCount, noMatchingTriggerCount, expressionFinder.availableExpressions.Count);
       string executionTimesSummary = "";
       // executionTimes.Sort();
       for (int i = 0; i < executionTimes.Count; i++) {
@@ -703,17 +907,17 @@ namespace Microsoft.Dafny {
     }
 
 
-    public static Tuple<string, string> GetFunctionParamList(Function func, string namePrefix = "") {
+    public static Tuple<List<string>, string> GetFunctionParamList(Function func, string namePrefix = "") {
       var funcName = func.FullDafnyName;
       string parameterNameTypes = "";
-      string paramNames = "";
+      List<string> paramNames = new List<string>();
       var sep = "";
       foreach (var param in func.Formals) {
         parameterNameTypes += sep + namePrefix + param.Name + ":" + Printer.GetFullTypeString(func.EnclosingClass.EnclosingModuleDefinition, param.Type, new HashSet<ModuleDefinition>());
-        paramNames += sep + namePrefix + param.Name;
+        paramNames.Add(namePrefix + param.Name);
         sep = ", ";
       }
-      return new Tuple<string, string>(paramNames, parameterNameTypes);
+      return new Tuple<List<string>, string>(paramNames, parameterNameTypes);
     }
 
     public static Function GetFunction(Program program, string funcName) {
@@ -781,6 +985,120 @@ namespace Microsoft.Dafny {
     private int constraintFuncLineCount = 0;
     private List<string> mergedCode = new List<string>();
 
+    public void CheckMaintainState(Program program, ExpressionFinder.ExpressionDepth exprDepth, int index) {
+      var funcName = workingFunc.Name;
+      int lemmaForMaintainStatePosition = -1;
+      int lemmaForMaintainStateStartPosition = -1;
+
+      var requestList = new List<VerificationRequest>();
+
+      var workingDir = $"{DafnyOptions.O.HoleEvaluatorWorkingDirectory}/{funcName}_{index}";
+      if (tasksList == null) {
+        throw new NotSupportedException();
+      }
+      else {
+        var changedFilesList = new HashSet<string>();
+        var changedPredicatesNamesDict = new Dictionary<string, string>();
+        for(int i = 0; i < Paths[0].Count; i++) {
+          changedFilesList.Add(includeParser.Normalized(Paths[0][i].Item1.BodyStartTok.filename));
+          changedPredicatesNamesDict.Add(Paths[0][i].Item1.Name, "old_" + Paths[0][i].Item1.Name);
+        }
+        bool maintainLemmaAdded = false;
+        foreach (var path in changedFilesList) {
+          var code = File.ReadAllLines(includeParser.commonPrefix + "/" + path);
+          if (workingConstraintFunc != null &&
+              path == includeParser.Normalized(workingConstraintFunc.BodyStartTok.filename)) {
+            maintainLemmaAdded = true;
+            code[code.Length - 1] = code[code.Length - 1] + "\n" + lemmaForMaintainabilityString;
+          }
+          for(int i = 0; i < Paths[0].Count; i++) {
+            // desiredFunctionUnresolved = GetFunctionFromUnresolved(unresolvedProgram, funcName);
+            var func = GetFunctionFromUnresolved(program, Paths[0][i].Item1.FullDafnyName);
+            Contract.Assert(func != null);
+            if (includeParser.Normalized(func.tok.filename) == path) {
+              for (int j = func.tok.line - 1; j < func.BodyEndTok.line; j++) {
+                code[j] = "";
+              }
+              string newFunc = "";
+              string oldFunc = "";
+              if (func.Name == workingFunc.Name && 
+                  func.tok.filename == workingFunc.tok.filename && 
+                  func.tok.line == workingFunc.tok.line) {
+                var clonedFunc = cloner.CloneFunction(func);
+                if (exprDepth.expr.HasCardinality) {
+                  clonedFunc.Body = Expression.CreateAnd(clonedFunc.Body, exprDepth.expr);
+                } else {
+                  clonedFunc.Body = Expression.CreateAnd(exprDepth.expr, clonedFunc.Body);
+                }
+                using (var wr = new System.IO.StringWriter()) {
+                  var pr = new Printer(wr, DafnyOptions.PrintModes.DllEmbed);
+                  pr.UniqueStringBeforeUnderscore = UnderscoreStr;
+                  pr.PrintFunction(clonedFunc, 0, false);
+                  newFunc = Printer.ToStringWithoutNewline(wr);
+                }
+              }
+              else {
+                using (var wr = new System.IO.StringWriter()) {
+                  var pr = new Printer(wr, DafnyOptions.PrintModes.DllEmbed);
+                  pr.UniqueStringBeforeUnderscore = UnderscoreStr;
+                  pr.PrintFunction(func, 0, false);
+                  newFunc = Printer.ToStringWithoutNewline(wr);
+                }
+              }
+              using (var wr = new System.IO.StringWriter()) {
+                var pr = new Printer(wr, DafnyOptions.PrintModes.DllEmbed);
+                pr.UniqueStringBeforeUnderscore = UnderscoreStr;
+                pr.ChangedPredicatesDict = changedPredicatesNamesDict;
+                // pr.ModuleForTypes = currentModuleDef;
+                pr.PrintFunction(func, 0, false);
+                oldFunc = Printer.ToStringWithoutNewline(wr);
+              }
+              code[func.tok.line - 1] = newFunc + "\n" + oldFunc;
+            }
+          }
+          var request = dafnyVerifier.GetFileRewriteRequest(String.Join('\n', code), exprDepth, index, path);
+          requestList.Add(request);
+        }
+        var constraintFuncPath = includeParser.Normalized(workingConstraintFunc.BodyStartTok.filename);
+        if (!maintainLemmaAdded) {
+          for (int i = 0; i < requestList.Count; i++) {
+            if (requestList[i].Path == constraintFuncPath) {
+              lemmaForMaintainStateStartPosition = requestList[i].Code.Count(f => (f == '\n')) + 2;
+              // requestList[i].Code = requestList[i].Code + "\n" + lemmaForMaintainabilityString;
+              var lastBraceLocation = requestList[i].Code.Length - 1;
+              while (lastBraceLocation > 0 && requestList[i].Code[lastBraceLocation] != '}') {
+                lastBraceLocation--;
+              }
+              requestList[i].Code = requestList[i].Code.Remove(lastBraceLocation - 1) + "\n" + lemmaForMaintainabilityString + "\n}";
+              lemmaForMaintainStatePosition = lemmaForMaintainStateStartPosition + lemmaForMaintainabilityLineCount;
+              foreach (var arg in tasksListDictionary[constraintFuncPath].Arguments.ToList()) {
+                requestList[i].Arguments.Add(arg);
+              }
+              requestList[i].Arguments.Add("/proc:*maintainCheck*");
+              dafnyVerifier.requestToPostConditionPosition[requestList[i]] = lemmaForMaintainStatePosition;
+              dafnyVerifier.requestToLemmaStartPosition[requestList[i]] = lemmaForMaintainStateStartPosition;
+              maintainLemmaAdded = true;
+              break;
+            }
+          }
+          if (!maintainLemmaAdded && workingConstraintFunc != null) {
+            maintainLemmaAdded = true;
+
+            lemmaForMaintainStateStartPosition = constraintFuncLineCount + 2;
+            var newBaseCode = constraintFuncCode + "\n" + lemmaForMaintainabilityString;
+            lemmaForMaintainStatePosition = lemmaForMaintainStateStartPosition + lemmaForMaintainabilityLineCount;
+            var argList = tasksListDictionary[constraintFuncPath].Arguments.ToList();
+            argList.Add("/proc:*maintainCheck*");
+            requestList.Add(dafnyVerifier.GetVerificationRequest(
+              newBaseCode, argList,
+              exprDepth, index, lemmaForMaintainStatePosition, lemmaForMaintainStateStartPosition,
+              constraintFuncPath));
+          }
+        }
+        dafnyVerifier.runDafny(requestList, exprDepth, index);
+      }
+    }
+
     public void PrintExprAndCreateProcess(Program program, ExpressionFinder.ExpressionDepth exprDepth, int cnt) {
       bool runOnce = DafnyOptions.O.HoleEvaluatorRunOnce;
       if (cnt % 1000 == 1) {
@@ -834,12 +1152,13 @@ namespace Microsoft.Dafny {
 
         var clonedWorkingFunc = cloner.CloneFunction(workingFunc);
         if (exprDepth.expr.HasCardinality) {
-          clonedWorkingFunc.Body = Expression.CreateAnd(clonedWorkingFunc.Body, exprDepth.expr);
-        } else {
           clonedWorkingFunc.Body = Expression.CreateAnd(exprDepth.expr, clonedWorkingFunc.Body);
+        } else {
+          clonedWorkingFunc.Body = Expression.CreateAnd(clonedWorkingFunc.Body, exprDepth.expr);
         }
         using (var wr = new System.IO.StringWriter()) {
           var pr = new Printer(wr, DafnyOptions.PrintModes.DllEmbed);
+          pr.UniqueStringBeforeUnderscore = UnderscoreStr;
           pr.PrintFunction(clonedWorkingFunc, 0, false);
           mergedCode[1] = Printer.ToStringWithoutNewline(wr);
         }

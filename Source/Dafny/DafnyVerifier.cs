@@ -36,7 +36,7 @@ namespace Microsoft.Dafny {
     private List<AsyncUnaryCall<Empty>> outstandingCleanupTasks = new List<AsyncUnaryCall<Empty>>();
     private List<Queue<IMessage>> tasksQueuePerDepth = new List<Queue<IMessage>>();
     // private ConcurrentQueue<CloneAndVerifyRequest> workerThreadTaskQueue = new ConcurrentQueue<CloneAndVerifyRequest>();
-    private BufferBlock<IMessage> tasksBuffer = new BufferBlock<IMessage>();
+    private BufferBlock<IMessage> tasksBuffer;
     private List<Task<int>> consumerTasks = new List<Task<int>>();
     private List<int> taskFinishedPerConsumer = new List<int>();
     private string OutputPrefix;
@@ -69,6 +69,11 @@ namespace Microsoft.Dafny {
       
       // assuming each server has 40 cores. making double of that consumers
       ConcurrentConsumerCount = serversList.Count * 2 * 40;
+      RestartConsumers();
+    }
+    public void RestartConsumers() {
+      tasksBuffer = new BufferBlock<IMessage>();
+      consumerTasks.Clear();
       // setting up consumers
       for (int i = 0; i < ConcurrentConsumerCount; i++) {
         consumerTasks.Add(ProcessRequestAsync(tasksBuffer));
@@ -298,6 +303,7 @@ namespace Microsoft.Dafny {
         foreach (var request in tasksQueuePerDepth[i]) {
           tasksBuffer.Post(request);
         }
+        tasksQueuePerDepth[i].Clear();
       }
       tasksBuffer.Complete();
 
@@ -331,6 +337,17 @@ namespace Microsoft.Dafny {
       else {
         throw new NotSupportedException($"invalid request type : {request.ToString()}");
       }
+    }
+
+    public VerificationRequest GetFileRewriteRequest(string code, ExpressionFinder.ExpressionDepth exprDepth,
+        int cnt, string remoteFilePath, string timeout = "1h") {
+      VerificationRequest request = new VerificationRequest();
+      request.Code = code;
+      request.Path = remoteFilePath;
+      request.Timeout = timeout;
+      requestToExpr[request] = exprDepth.expr;
+      requestToCnt[request] = cnt;
+      return request;
     }
 
     public VerificationRequest GetVerificationRequest(string code, List<string> args, ExpressionFinder.ExpressionDepth exprDepth,

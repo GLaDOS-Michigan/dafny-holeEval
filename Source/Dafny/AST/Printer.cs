@@ -22,6 +22,7 @@ namespace Microsoft.Dafny {
     bool printingExportSet = false;
     bool printingDesugared = false;
     public string Prefix = "";
+    public Dictionary<string, string> ChangedPredicatesDict = null;
     public string UniqueStringBeforeUnderscore = "";
     public ModuleDefinition ModuleForTypes = null;
     private string GetAppenededUnique(string name) {
@@ -924,7 +925,11 @@ namespace Microsoft.Dafny {
       string k = isPredicate ? "predicate" : f.WhatKind;
       if (f.HasStaticKeyword) { k = "static " + k; }
       if (!f.IsGhost && f.ByMethodBody == null) { k += " method"; }
-      PrintClassMethodHelper(k, f.Attributes, f.Name, f.TypeArgs);
+      if (ChangedPredicatesDict != null && ChangedPredicatesDict.ContainsKey(f.Name)) {
+        PrintClassMethodHelper(k, f.Attributes, ChangedPredicatesDict[f.Name], f.TypeArgs);
+      } else {
+        PrintClassMethodHelper(k, f.Attributes, f.Name, f.TypeArgs);
+      }
       if (f.SignatureIsOmitted) {
         wr.Write(" ...");
       } else {
@@ -2211,7 +2216,17 @@ namespace Microsoft.Dafny {
 
       } else if (expr is NameSegment) {
         var e = (NameSegment)expr;
-        wr.Write(GetAppenededUnique(e.Name));
+        if (e.WasResolved() && e.Resolved is DatatypeValue) {
+          wr.Write(GetFullTypeString(ModuleForTypes, e.Type, new HashSet<ModuleDefinition>()));
+          wr.Write(".");
+          wr.Write(e.Name);
+        } else {
+          if (ChangedPredicatesDict != null && ChangedPredicatesDict.ContainsKey(e.Name)) {
+            wr.Write(GetAppenededUnique(ChangedPredicatesDict[e.Name]));
+          } else {
+            wr.Write(GetAppenededUnique(e.Name));
+          }
+        }
         if (e.OptTypeArguments != null) {
           PrintTypeInstantiation(e.OptTypeArguments);
         }
@@ -2259,7 +2274,11 @@ namespace Microsoft.Dafny {
             var mse = (e.Lhs.Resolved as MemberSelectExpr);
             if (mse != null) {
               var f = mse.Member as Function;
-              wr.Write(f.FullDafnyName);
+              if (ChangedPredicatesDict != null && ChangedPredicatesDict.ContainsKey(f.FullDafnyName)) {
+                wr.Write(ChangedPredicatesDict[f.FullDafnyName]);
+              } else {
+                wr.Write(f.FullDafnyName);
+              }
             } else {
               PrintExpr(e.Lhs, opBindingStrength, false, false, !parensNeeded && isFollowedBySemicolon, -1, keyword);
             }
@@ -2845,7 +2864,12 @@ namespace Microsoft.Dafny {
           int i = 0;
           foreach (var mc in e.Cases) {
             bool isLastCase = i == e.Cases.Count - 1;
-            wr.Write(" case {0}", mc.Pat.ToString());
+            if (mc.Pat.ToString().StartsWith("_") && UniqueStringBeforeUnderscore != "") {
+              wr.Write(" case _");
+            }
+            else {
+              wr.Write(" case {0}", mc.Pat.ToString());
+            }
             wr.Write(" => ");
             PrintExpression(mc.Body, isRightmost && isLastCase, !parensNeeded && isFollowedBySemicolon);
             i++;
@@ -2915,7 +2939,7 @@ namespace Microsoft.Dafny {
       Contract.Requires(pat != null);
       var v = pat.Var;
       if (v != null) {
-        wr.Write(v.DisplayName);
+        wr.Write(GetAppenededUnique(v.DisplayName));
         if (v.OptionalType is NonProxyType || DafnyOptions.O.DafnyPrintResolvedFile != null) {
           PrintType(": ", v.OptionalType);
         }
@@ -2973,7 +2997,7 @@ namespace Microsoft.Dafny {
       Contract.Requires(boundVars != null);
       string sep = "";
       foreach (BoundVar bv in boundVars) {
-        wr.Write("{0}{1}", sep, bv.DisplayName);
+        wr.Write("{0}{1}", sep, GetAppenededUnique(bv.DisplayName));
         PrintType(": ", bv.Type);
         sep = ", ";
       }

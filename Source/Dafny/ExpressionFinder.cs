@@ -377,7 +377,6 @@ namespace Microsoft.Dafny {
               {
                 var equalityExpr = Expression.CreateEq(values[i].expr, values[j].expr, values[i].expr.Type);
                 equalityExpr.HasCardinality = values[i].expr.HasCardinality | values[j].expr.HasCardinality;
-                // TODO(armin): should this be max or addition?
                 availableExpressions.Add(new ExpressionDepth(equalityExpr, Math.Max(values[i].depth, values[j].depth)));
               }
               if (values[i].expr is ApplySuffix || values[j].expr is ApplySuffix) {
@@ -398,31 +397,39 @@ namespace Microsoft.Dafny {
               }
               // Lower than
               {
-                var lowerThanExpr = Expression.CreateLess(values[i].expr, values[j].expr);
-                lowerThanExpr.HasCardinality = values[i].expr.HasCardinality | values[j].expr.HasCardinality;
-                availableExpressions.Add(new ExpressionDepth(lowerThanExpr, Math.Max(values[i].depth, values[j].depth)));
+                if (k != "nat" || (Printer.ExprToString(values[j].expr) != "0" && Printer.ExprToString(values[j].expr) != "1")) {
+                  var lowerThanExpr = Expression.CreateLess(values[i].expr, values[j].expr);
+                  lowerThanExpr.HasCardinality = values[i].expr.HasCardinality | values[j].expr.HasCardinality;
+                  availableExpressions.Add(new ExpressionDepth(lowerThanExpr, Math.Max(values[i].depth, values[j].  depth)));
+                }
               }
               // Greater Equal = !(Lower than)
               {
-                var geExpr = Expression.CreateNot(values[i].expr.tok, Expression.CreateLess(values[i].expr, values[j].expr));
-                geExpr.HasCardinality = values[i].expr.HasCardinality | values[j].expr.HasCardinality;
-                availableExpressions.Add(new ExpressionDepth(geExpr, Math.Max(values[i].depth, values[j].depth)));
-                negateOfExpressionIndex[availableExpressions.Count - 1] = availableExpressions.Count - 2;
-                negateOfExpressionIndex[availableExpressions.Count - 2] = availableExpressions.Count - 1;
+                if (k != "nat" || (Printer.ExprToString(values[i].expr) != "0" && Printer.ExprToString(values[i].expr) != "1")) {
+                  var geExpr = Expression.CreateNot(values[i].expr.tok, Expression.CreateLess(values[i].expr, values[j].expr));
+                  geExpr.HasCardinality = values[i].expr.HasCardinality | values[j].expr.HasCardinality;
+                  availableExpressions.Add(new ExpressionDepth(geExpr, Math.Max(values[i].depth, values[j].depth)));
+                  negateOfExpressionIndex[availableExpressions.Count - 1] = availableExpressions.Count - 2;
+                  negateOfExpressionIndex[availableExpressions.Count - 2] = availableExpressions.Count - 1;
+                }
               }
               // Lower Equal
               {
-                var leExpr = Expression.CreateAtMost(values[i].expr, values[j].expr);
-                leExpr.HasCardinality = values[i].expr.HasCardinality | values[j].expr.HasCardinality;
-                availableExpressions.Add(new ExpressionDepth(leExpr, Math.Max(values[i].depth, values[j].depth)));
+                if (k != "nat" || (Printer.ExprToString(values[j].expr) != "0" && Printer.ExprToString(values[j].expr) != "1" && Printer.ExprToString(values[i].expr) != "0" && Printer.ExprToString(values[i].expr) != "1")) {
+                  var leExpr = Expression.CreateAtMost(values[i].expr, values[j].expr);
+                  leExpr.HasCardinality = values[i].expr.HasCardinality | values[j].expr.HasCardinality;
+                  availableExpressions.Add(new ExpressionDepth(leExpr, Math.Max(values[i].depth, values[j].depth)));
+                }
               }
               // Greater Than = !(Lower equal)
               {
-                var gtExpr = Expression.CreateNot(values[i].expr.tok, Expression.CreateAtMost(values[i].expr, values[j].expr));
-                gtExpr.HasCardinality = values[i].expr.HasCardinality | values[j].expr.HasCardinality;
-                availableExpressions.Add(new ExpressionDepth(gtExpr, Math.Max(values[i].depth, values[j].depth)));
-                negateOfExpressionIndex[availableExpressions.Count - 1] = availableExpressions.Count - 2;
-                negateOfExpressionIndex[availableExpressions.Count - 2] = availableExpressions.Count - 1;
+                if (k != "nat" || (Printer.ExprToString(values[i].expr) != "0" && Printer.ExprToString(values[i].expr) != "1")) {
+                  var gtExpr = Expression.CreateNot(values[i].expr.tok, Expression.CreateAtMost(values[i].expr, values[j].expr));
+                  gtExpr.HasCardinality = values[i].expr.HasCardinality | values[j].expr.HasCardinality;
+                  availableExpressions.Add(new ExpressionDepth(gtExpr, Math.Max(values[i].depth, values[j].depth)));
+                  negateOfExpressionIndex[availableExpressions.Count - 1] = availableExpressions.Count - 2;
+                  negateOfExpressionIndex[availableExpressions.Count - 2] = availableExpressions.Count - 1;
+                }
               }
             }
           }
@@ -742,9 +749,15 @@ namespace Microsoft.Dafny {
           yield return new ExpressionDepth(minusOneLiteralExpr, exprDepth.depth);
         } else if (t is CollectionType) {
           // create cardinality
+          var cardinalityExpr = Expression.CreateCardinality(expr, program.BuiltIns);
+          yield return new ExpressionDepth(cardinalityExpr, exprDepth.depth);
+          {
+            var zeroLiteralExpr = Expression.CreateNatLiteral(expr.tok, 0, Type.Nat());
+            yield return new ExpressionDepth(zeroLiteralExpr, 1);
+            var oneLiteralExpr = Expression.CreateNatLiteral(expr.tok, 1, Type.Nat());
+            yield return new ExpressionDepth(oneLiteralExpr, 1);
+          }
           if (exprDepth.depth + 1 <= maxExpressionDepth) {
-            var cardinalityExpr = Expression.CreateCardinality(expr, program.BuiltIns);
-            yield return new ExpressionDepth(cardinalityExpr, exprDepth.depth + 1);
             
             var cardinalityMinusOneExpr = Expression.CreateDecrement(cardinalityExpr, 1);
             yield return new ExpressionDepth(cardinalityMinusOneExpr, exprDepth.depth + 1);
@@ -766,7 +779,6 @@ namespace Microsoft.Dafny {
 
             {
               // create last element of a sequence
-              var cardinalityExpr = Expression.CreateCardinality(expr, program.BuiltIns);
               var lastElementExpr = Expression.CreateDecrement(cardinalityExpr, 1);
               var lastElement = new SeqSelectExpr(expr.tok, true, expr, lastElementExpr, null);
               lastElement.Type = (t as SeqType).Arg;
@@ -787,7 +799,6 @@ namespace Microsoft.Dafny {
 
               {
                 // create drop last element of a sequence
-                var cardinalityExpr = Expression.CreateCardinality(expr, program.BuiltIns);
                 var cardinalityMinusOneExpr = Expression.CreateDecrement(expr, 1);
                 var dropLastElement = new SeqSelectExpr(expr.tok, false, expr, null, cardinalityMinusOneExpr);
                 dropLastElement.Type = t;
