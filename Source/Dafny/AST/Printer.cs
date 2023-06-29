@@ -52,16 +52,40 @@ namespace Microsoft.Dafny {
       }
       seenModules.Add(moduleDef);
       if (type is UserDefinedType) {
+        var typeStr = type.ToString();
+        if (type.IsDatatype) {
+          typeStr = type.AsDatatype.ToString();
+        }
         foreach (var decl in ModuleDefinition.AllTypesWithMembers(moduleDef.TopLevelDecls)) {
-          if (decl.ToString() == type.ToString()) {
+          if (decl.ToString() == typeStr) {
             var moduleName = GetFullModuleName(moduleDef);
-            return (moduleName == "") ? type.ToString() : (moduleName + "." + type.ToString());
+            var result = (moduleName == "") ? typeStr : (moduleName + "." + typeStr);
+            if (type.TypeArgs.Count != 0) {
+              result += "<";
+              var sep = "";
+              foreach (var arg in type.TypeArgs) {
+                result += sep + GetFullTypeString(moduleDef, arg, new HashSet<ModuleDefinition>());
+                sep = ", ";
+              }
+              result += ">";
+            }
+            return result;
           }
         }
         foreach (var decl in ModuleDefinition.AllTypeSynonymDecls(moduleDef.TopLevelDecls)) {
-          if (decl.ToString() == type.ToString()) {
+          if (decl.ToString() == typeStr) {
             var moduleName = GetFullModuleName(moduleDef);
-            return (moduleName == "") ? type.ToString() : (moduleName + "." + type.ToString());
+            var result = (moduleName == "") ? typeStr : (moduleName + "." + typeStr);
+            if (type.TypeArgs.Count != 0) {
+              result += "<";
+              var sep = "";
+              foreach (var arg in type.TypeArgs) {
+                result += sep + GetFullTypeString(moduleDef, arg, new HashSet<ModuleDefinition>());
+                sep = ", ";
+              }
+              result += ">";
+            }
+            return result;
           }
         }
         foreach (var imp in ModuleDefinition.AllDeclarationsAndNonNullTypeDecls(moduleDef.TopLevelDecls)) {
