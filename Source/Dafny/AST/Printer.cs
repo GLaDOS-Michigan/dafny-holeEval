@@ -2442,7 +2442,12 @@ namespace Microsoft.Dafny {
           PrintExpr(e.Receiver, opBindingStrength, false, false, !parensNeeded && isFollowedBySemicolon, -1, keyword);
           wr.Write(".");
         }
-        wr.Write(e.Name);
+        if (Prefix != "" && e.Function != null) {
+          wr.Write(e.Function.FullDafnyName);
+        }
+        else {
+          wr.Write(e.Name);
+        }
         /* When debugging, this is nice to have:
         if (e.TypeArgumentSubstitutions.Count > 0) {
           wr.Write("[");

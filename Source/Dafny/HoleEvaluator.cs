@@ -252,17 +252,35 @@ namespace Microsoft.Dafny {
             iteExpr.Test, currExprCondParentTuple.Item2, currExprCondParentTuple.Item3));
 
           // add then path
-          var thenCond = currExprCondParentTuple.Item2 != null ?
-            Expression.CreateAnd(currExprCondParentTuple.Item2, iteExpr.Test) :
-            iteExpr.Test;
+          Expression thenCond;
+          if (currExprCondParentTuple.Item2 != null && currExprCondParentTuple.Item2 is LetExpr) {
+            var prevLet = currExprCondParentTuple.Item2 as LetExpr;
+            thenCond = Expression.CreateLet(prevLet.tok, prevLet.LHSs, prevLet.RHSs, 
+              Expression.CreateAnd(prevLet.Body, iteExpr.Test), prevLet.Exact);
+          }
+          else {
+            thenCond = currExprCondParentTuple.Item2 != null ?
+              Expression.CreateAnd(currExprCondParentTuple.Item2, iteExpr.Test) :
+              iteExpr.Test;
+          }
           queue.Enqueue(new Tuple<Expression, Expression, Function>(
             iteExpr.Thn, thenCond, currExprCondParentTuple.Item3));
 
           // add else path
-          var elseCond = currExprCondParentTuple.Item2 != null ?
-            Expression.CreateAnd(currExprCondParentTuple.Item2,
-                                 Expression.CreateNot(iteExpr.Test.tok, iteExpr.Test)) :
-            Expression.CreateNot(iteExpr.Test.tok, iteExpr.Test);
+          Expression elseCond;
+          if (currExprCondParentTuple.Item2 != null && currExprCondParentTuple.Item2 is LetExpr) {
+            var prevLet = currExprCondParentTuple.Item2 as LetExpr;
+            elseCond = Expression.CreateLet(prevLet.tok, prevLet.LHSs, prevLet.RHSs, 
+              Expression.CreateAnd(prevLet.Body, 
+                Expression.CreateNot(iteExpr.Test.tok, iteExpr.Test)
+              ), prevLet.Exact);
+          }
+          else {
+            elseCond = currExprCondParentTuple.Item2 != null ?
+              Expression.CreateAnd(currExprCondParentTuple.Item2,
+                                   Expression.CreateNot(iteExpr.Test.tok, iteExpr.Test)) :
+              Expression.CreateNot(iteExpr.Test.tok, iteExpr.Test);
+          }
           queue.Enqueue(new Tuple<Expression, Expression, Function>(
             iteExpr.Els, elseCond, currExprCondParentTuple.Item3));
 
@@ -277,9 +295,17 @@ namespace Microsoft.Dafny {
           // Console.WriteLine(Printer.ExprToString(matchExpr));
           foreach (var c in matchExpr.Cases) {
             // Console.WriteLine($"{c.Ctor} -> {c.Ctor.Name}");
-            var cond = currExprCondParentTuple.Item2 != null ?
-              Expression.CreateAnd(currExprCondParentTuple.Item2, new MemberSelectExpr(c.Ctor.tok, matchExpr.Source, c.Ctor.Name)) :
-              new MemberSelectExpr(c.Ctor.tok, matchExpr.Source, c.Ctor.Name + "?");
+            Expression cond;
+            if (currExprCondParentTuple.Item2 != null && currExprCondParentTuple.Item2 is LetExpr) {
+              var prevLet = currExprCondParentTuple.Item2 as LetExpr;
+              cond = new LetExpr(prevLet.tok, prevLet.LHSs, prevLet.RHSs, 
+                Expression.CreateAnd(prevLet.Body, new MemberSelectExpr(c.Ctor.tok, matchExpr.Source, c.Ctor.Name)), prevLet.Exact);
+            }
+            else {
+              cond = currExprCondParentTuple.Item2 != null ?
+                Expression.CreateAnd(currExprCondParentTuple.Item2, new MemberSelectExpr(c.Ctor.tok, matchExpr.Source, c.Ctor.Name)) :
+                new MemberSelectExpr(c.Ctor.tok, matchExpr.Source, c.Ctor.Name + "?");
+            }
             queue.Enqueue(new Tuple<Expression, Expression, Function>(
               c.Body, cond, currExprCondParentTuple.Item3));
           }
@@ -296,10 +322,52 @@ namespace Microsoft.Dafny {
               new BoundVar(bv.Tok, bv.Name, bv.Type)));
           }
           rhss.Add(existsExpr.Term);
-          var cond = Expression.CreateAnd(existsExpr, Expression.CreateLet(existsExpr.BodyStartTok, lhss, rhss,
+          Expression prevCond;
+          if (currExprCondParentTuple.Item2 != null && currExprCondParentTuple.Item2 is LetExpr) {
+            var prevLet = currExprCondParentTuple.Item2 as LetExpr;
+            prevCond = Expression.CreateLet(prevLet.tok, prevLet.LHSs, prevLet.RHSs, 
+              Expression.CreateAnd(prevLet.Body, existsExpr), prevLet.Exact);
+          }
+          else {
+            prevCond = currExprCondParentTuple.Item2 != null ?
+              Expression.CreateAnd(currExprCondParentTuple.Item2, existsExpr) :
+              existsExpr;
+          }
+          var cond = Expression.CreateAnd(prevCond, Expression.CreateLet(existsExpr.BodyStartTok, lhss, rhss,
             Expression.CreateBoolLiteral(existsExpr.BodyStartTok, true), false));
 
           queue.Enqueue(new Tuple<Expression, Expression, Function>(existsExpr.Term, cond, currExprCondParentTuple.Item3));
+          G.AddVertex(currExprCondParentTuple.Item3);
+        } else if (currExprCondParentTuple.Item1 is LetExpr) {
+          var letExpr = currExprCondParentTuple.Item1 as LetExpr;
+          var currLetExpr = letExpr;
+          var lhss = new List<CasePattern<BoundVar>>();
+          var rhss = new List<Expression>();
+          while (true) {
+            for (int i = 0; i < currLetExpr.LHSs.Count; i++) {
+              var lhs = currLetExpr.LHSs[i];
+              var rhs = currLetExpr.RHSs[i];
+              // lhss.Add(new CasePattern<BoundVar>(bv.Tok,
+              //   new BoundVar(bv.Tok, currExprCondParentTuple.Item3.Name + "_" + bv.Name, bv.Type)));
+              lhss.Add(new CasePattern<BoundVar>(lhs.tok,
+                new BoundVar(lhs.tok, lhs.Id, lhs.Expr.Type)));
+              rhss.Add(rhs);
+            }
+            if (currLetExpr.Body is LetExpr) {
+              currLetExpr = currLetExpr.Body as LetExpr;
+            }
+            else {
+              break;
+            }
+          }
+          // var cond = currExprCondParentTuple.Item2 != null ?
+          //   Expression.CreateAnd(currExprCondParentTuple.Item2, letExpr) :
+          //   letExpr;
+
+          var cond = Expression.CreateLet(letExpr.Body.tok, lhss, rhss,
+            Expression.CreateBoolLiteral(letExpr.BodyStartTok, true), letExpr.Exact);
+
+          queue.Enqueue(new Tuple<Expression, Expression, Function>(letExpr.Body, cond, currExprCondParentTuple.Item3));
           G.AddVertex(currExprCondParentTuple.Item3);
         } else {
           foreach (var e in currExprCondParentTuple.Item1.SubExpressions) {
@@ -423,7 +491,10 @@ namespace Microsoft.Dafny {
         var condExpr = path[i + 1].Item3;
         var requiresOrAndSep = "requires";
         if (condExpr != null) {
-          if (condExpr is BinaryExpr && (condExpr as BinaryExpr).E1 is LetExpr) {
+          if (condExpr is BinaryExpr && 
+                ((condExpr as BinaryExpr).E0 is LetExpr ||
+                 (condExpr as BinaryExpr).E1 is LetExpr))
+          {
             requiresOrAndSep = "  &&";
           }
           currentModuleDef = path[i].Item1.EnclosingClass.EnclosingModuleDefinition;
@@ -531,11 +602,17 @@ namespace Microsoft.Dafny {
         var condExpr = path[i + 1].Item3;
         var requiresOrAndSep = "requires";
         if (condExpr != null) {
-          if (condExpr is BinaryExpr && (condExpr as BinaryExpr).E1 is LetExpr) {
+          if (condExpr is BinaryExpr && 
+                ((condExpr as BinaryExpr).E0 is LetExpr ||
+                 (condExpr as BinaryExpr).E1 is LetExpr) )
+          {
             requiresOrAndSep = "  &&";
           }
           currentModuleDef = path[i].Item1.EnclosingClass.EnclosingModuleDefinition;
           res += $"  {requiresOrAndSep} " + GetPrefixedString(path[i].Item1.Name + "_", condExpr, currentModuleDef) + "\n";
+          if (condExpr is LetExpr) {
+            requiresOrAndSep = "  &&";
+          }
         }
         for (int j = 0; j < callExpr.Args.Count; j++) {
           res += $"  {requiresOrAndSep} ";
@@ -743,20 +820,20 @@ namespace Microsoft.Dafny {
         }
       }
       Console.WriteLine($"{dafnyVerifier.sw.ElapsedMilliseconds / 1000}:: finish exploring, try to check maintain state lemma");
-      var passingProof = new List<int>();
-      dafnyVerifier.RestartConsumers();
-      for (int i = 0; i < expressionFinder.availableExpressions.Count; i++) {
-        if (combinationResults[i] == Result.CorrectProof || combinationResults[i] == Result.CorrectProof) {
-          var expr = expressionFinder.availableExpressions[i];
-          CheckMaintainState(unresolvedProgram, expr, expressionFinder.availableExpressions.Count + passingProof.Count);
-          passingProof.Add(i);
-        }
-      }
-      await dafnyVerifier.startProofTasksAccordingToPriority();
+      // var passingProof = new List<int>();
+      // dafnyVerifier.RestartConsumers();
+      // for (int i = 0; i < expressionFinder.availableExpressions.Count; i++) {
+      //   if (combinationResults[i] == Result.CorrectProof || combinationResults[i] == Result.CorrectProof) {
+      //     var expr = expressionFinder.availableExpressions[i];
+      //     CheckMaintainState(unresolvedProgram, expr, expressionFinder.availableExpressions.Count + passingProof.Count);
+      //     passingProof.Add(i);
+      //   }
+      // }
+      // await dafnyVerifier.startProofTasksAccordingToPriority();
       dafnyVerifier.Cleanup();
-      for (int i = 0; i < passingProof.Count; i++) {
-        UpdateCombinationResultForMaintainStateLemma(passingProof[i], i + expressionFinder.availableExpressions.Count);
-      }
+      // for (int i = 0; i < passingProof.Count; i++) {
+      //   UpdateCombinationResultForMaintainStateLemma(passingProof[i], i + expressionFinder.availableExpressions.Count);
+      // }
       int correctProofCount = 0;
       int correctProofByTimeoutCount = 0;
       int correctProofWithoutMaintainCount = 0;

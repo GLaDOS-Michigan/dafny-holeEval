@@ -140,35 +140,8 @@ namespace Microsoft.Dafny {
     }
 
     public Function FindHoleAfterRemoveFileLine(Program program, string removeFileLine, string baseFuncName) {
-      var fileLineArray = removeFileLine.Split(':');
-      var file = fileLineArray[0];
-      var line = Int32.Parse(fileLineArray[1]);
-      foreach (var kvp in program.ModuleSigs) {
-        foreach (var topLevelDecl in ModuleDefinition.AllFunctions(kvp.Value.ModuleDef.TopLevelDecls)) {
-          if (Path.GetFileName(topLevelDecl.tok.filename) == file) {
-            if (topLevelDecl.BodyStartTok.line <= line && line <= topLevelDecl.BodyEndTok.line) {
-              var exprList = Expression.Conjuncts(topLevelDecl.Body).ToList();
-              // Console.WriteLine($"topLevelDecl : {topLevelDecl.FullDafnyName}");
-              var i = -1;
-              for (i = 0; i < exprList.Count - 1; i++) {
-                if (exprList[i].tok.line <= line && line < exprList[i + 1].tok.line) {
-                  break;
-                }
-              }
-              // Console.WriteLine($"{i} {Printer.ExprToString(exprList[i])}");
-              exprList.RemoveAt(i);
-              var body = exprList[0];
-              for (int j = 1; j < exprList.Count; j++) {
-                body = Expression.CreateAnd(body, exprList[j]);
-              }
-              topLevelDecl.Body = body;
-              string dotGraphOutput = $"./callGraph_after_removing_{file}_{line}.dot";
-              return FindHole(program, baseFuncName, dotGraphOutput);
-            }
-          }
-        }
-      }
-      return null;
+      var funcName = CodeModifier.Erase(program, removeFileLine);
+      return FindHole(program, baseFuncName);
     }
     public Function FindHole(Program program, string funcName, string dotGraphOutputPath = "") {
       int timeLimitMultiplier = 2;
