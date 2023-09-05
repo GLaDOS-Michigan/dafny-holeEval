@@ -138,6 +138,7 @@ namespace Microsoft.Dafny {
     public virtual TestGenerationOptions TestGenOptions =>
       testGenOptions ??= new TestGenerationOptions();
 
+    public bool CreateOpaqueFunc = false;
     public string FindHoleFromFunctionName = null;
     public string ProofEvaluatorLemmaName = null;
     public string HoleEvaluatorFunctionName = null;
@@ -157,6 +158,7 @@ namespace Microsoft.Dafny {
     public string ProofEvaluatorRemoveFileLine = null;
     public int ProofEvaluatorInsertionPoint = -1;
     public string HoleEvaluatorCommands = null;
+    public string HoleEvaluatorSpecifiedFunc = "";
     public bool HoleEvaluatorIncludeFunctionInvocations = false;
     public string ProofEvaluatorExcludeDir = null;
 
@@ -513,6 +515,10 @@ namespace Microsoft.Dafny {
           ExtractCounterexample = true;
           return true;
 
+        case "opaqueFinder":
+          CreateOpaqueFunc = true;
+          return true;
+
         case "holeFinder":
           if (ps.ConfirmArgumentCount(1)) {
             FindHoleFromFunctionName = args[ps.i];
@@ -617,6 +623,12 @@ namespace Microsoft.Dafny {
         case "holeEvalCommands":
           if (ps.ConfirmArgumentCount(1)) {
             HoleEvaluatorCommands = args[ps.i];
+          }
+          return true;
+
+        case "holeEvalSpecifiedFunc":
+          if (ps.ConfirmArgumentCount(1)) {
+            HoleEvaluatorSpecifiedFunc = args[ps.i];
           }
           return true;
         

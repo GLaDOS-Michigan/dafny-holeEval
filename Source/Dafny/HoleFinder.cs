@@ -27,9 +27,17 @@ namespace Microsoft.Dafny {
       return new string(Enumerable.Repeat(chars, length)
           .Select(s => s[random.Next(s.Length)]).ToArray());
     }
-
-    private HoleFinderExecutor holeFinderExecutor = new HoleFinderExecutor();
     private ExpressionFinder.ExpressionDepth constraintExpr = null;
+
+    public DafnyVerifierClient dafnyVerifier;
+    public DirectedCallGraph<Function, FunctionCallExpr, Expression> CG;
+    private TasksList tasksList = null;
+    private Dictionary<string, VerificationTaskArgs> tasksListDictionary = new Dictionary<string, VerificationTaskArgs>();
+    private IncludeParser includeParser = null;
+    private List<string> affectedFiles = new List<string>();
+    public static int validityLemmaNameStartCol = 0;
+    public static string lemmaForExprValidityString = "";
+    private static int lemmaForExprValidityLineCount = 0;
 
     public HoleFinder() { }
 
@@ -45,11 +53,28 @@ namespace Microsoft.Dafny {
             func.Reads, func.Ens, func.Decreases,
             func.Body, func.ByMethodTok, func.ByMethodBody,
             func.Attributes, func.SignatureEllipsis);
+
+      // List<List<Tuple<Function, FunctionCallExpr, Expression>>> AllPaths =
+      //   new List<List<Tuple<Function, FunctionCallExpr, Expression>>>();
+      // List<Tuple<Function, FunctionCallExpr, Expression>> CurrentPath =
+      //   new List<Tuple<Function, FunctionCallExpr, Expression>>();
+      // CurrentPath.Add(new Tuple<Function, FunctionCallExpr, Expression>(rootFunc, null, null));
+      // HoleEvaluator.GetAllPaths(CG, rootFunc, func, AllPaths, CurrentPath);
+      
       List<Tuple<Function, FunctionCallExpr, Expression>> p = new List<Tuple<Function, FunctionCallExpr, Expression>>();
       p.Add(new Tuple<Function, FunctionCallExpr, Expression>(rootFunc, null, null));
       string lemmaForExprValidityString = HoleEvaluator.GetValidityLemma(p, null, constraintExpr, -1);
       int lemmaForExprValidityPosition = 0;
       int lemmaForExprValidityStartPosition = 0;
+
+      // var requestList = new List<VerificationRequest>();
+      // var workingDir = $"{DafnyOptions.O.HoleEvaluatorWorkingDirectory}/{funcName}_{cnt}";
+      // if (tasksList == null) {
+      //   throw new NotImplementedException();
+      // }
+      // else {
+        
+      // }
 
       using (var wr = new System.IO.StringWriter()) {
         var pr = new Printer(wr, DafnyOptions.PrintModes.DllEmbed);
@@ -77,83 +102,49 @@ namespace Microsoft.Dafny {
           args += arg + " ";
         }
       }
-      holeFinderExecutor.createProcessWithOutput(dafnyBinaryPath,
-          $"{args} {DafnyOptions.O.HoleEvaluatorWorkingDirectory}holeFinder_{funcName}.dfy /exitAfterFirstError",
-          func, lemmaForExprValidityPosition, lemmaForExprValidityStartPosition, $"holeFinder_{funcName}");
+      // holeFinderExecutor.createProcessWithOutput(dafnyBinaryPath,
+      //     $"{args} {DafnyOptions.O.HoleEvaluatorWorkingDirectory}holeFinder_{funcName}.dfy /exitAfterFirstError",
+      //     func, lemmaForExprValidityPosition, lemmaForExprValidityStartPosition, $"holeFinder_{funcName}");
     }
 
-    void PrintCallGraphWithPotentialBugInfo(
-        DirectedCallGraph<Function, FunctionCallExpr, Expression> CG, string outputPath) {
-      string graphVizOutput = $"digraph \"call_graph\" {{\n";
-      graphVizOutput += "\n  node [colorscheme=accent3] # Apply colorscheme to all nodes\n";
-      graphVizOutput += "\n  // List of nodes:\n";
-      foreach (var node in CG.AdjacencyWeightList.Keys) {
-        if (node.Body == null) continue;
-        var p = holeFinderExecutor.funcToProcess[node];
-        var output = holeFinderExecutor.dafnyOutput[p];
-        var fileName = holeFinderExecutor.inputFileName[p];
-        var position = holeFinderExecutor.processToPostConditionPosition[p];
-        var lemmaStartPosition = holeFinderExecutor.processToLemmaStartPosition[p];
-        var expectedOutput =
-          $"{DafnyOptions.O.HoleEvaluatorWorkingDirectory}{fileName}.dfy({position},0): Error: A postcondition might not hold on this return path.";
-        var expectedInconclusiveOutputStart =
-          $"{DafnyOptions.O.HoleEvaluatorWorkingDirectory}{fileName}.dfy({lemmaStartPosition},{HoleEvaluator.validityLemmaNameStartCol}): Verification inconclusive";
-        Result result = DafnyExecutor.IsCorrectOutput(output, expectedOutput, expectedInconclusiveOutputStart);
-        if (result != Result.IncorrectProof) {
-          // correctExpressions.Add(dafnyMainExecutor.processToExpr[p]);
-          // Console.WriteLine(output);
-          // result = Result.CorrectProof;
-          // Console.WriteLine(p.StartInfo.Arguments);
-          Console.WriteLine(holeFinderExecutor.processToFunc[p].FullDafnyName);
-        } else if (output.EndsWith("0 errors\n")) {
-          result = Result.FalsePredicate;
-        } else if (output.EndsWith($"resolution/type errors detected in {fileName}.dfy\n")) {
-          result = Result.InvalidExpr;
-        } else {
-          result = Result.IncorrectProof;
-        }
-        switch (result) {
-          case Result.CorrectProof:
-            graphVizOutput += $"  \"{node.FullDafnyName}\" [label=\"{node.FullDafnyName}\" style=\"filled,dashed\" color=\"black\" fillcolor=1];\n";
-            break;
-          case Result.CorrectProofByTimeout:
-            graphVizOutput += $"  \"{node.FullDafnyName}\" [label=\"{node.FullDafnyName}\" style=\"filled,dashed\" color=\"black\" fillcolor=2];\n";
-            break;
-          case Result.FalsePredicate:
-            graphVizOutput += $"  \"{node.FullDafnyName}\" [label=\"{node.FullDafnyName}\" style=\"filled,dashed\" color=\"black\" fillcolor=3];\n";
-            break;
-          case Result.IncorrectProof:
-          case Result.InvalidExpr:
-            graphVizOutput += $"  \"{node.FullDafnyName}\" [label=\"{node.FullDafnyName}\"];\n";
-            break;
-        }
-      }
-      graphVizOutput += "\n  // List of edges:\n";
-      foreach (var node in CG.AdjacencyWeightList.Keys) {
-        if (node.Body == null) continue;
-        foreach (var edge in CG.AdjacencyWeightList[node]) {
-          graphVizOutput += $"  \"{node.FullDafnyName}\" -> \"{edge.Item1.FullDafnyName}\";\n";
-        }
-      }
-      graphVizOutput += "}\n";
-      File.WriteAllTextAsync(outputPath, graphVizOutput);
-    }
-
-    public Function FindHoleAfterRemoveFileLine(Program program, string removeFileLine, string baseFuncName) {
+    public async Task<Function> FindHoleAfterRemoveFileLine(Program program, string removeFileLine, string baseFuncName) {
       var funcName = CodeModifier.Erase(program, removeFileLine);
-      return FindHole(program, baseFuncName);
+      return await FindHole(program, funcName, baseFuncName);
     }
-    public Function FindHole(Program program, string funcName, string dotGraphOutputPath = "") {
+    public async Task<Function> FindHole(Program program, string funcName, string baseFuncName) {
       int timeLimitMultiplier = 2;
       int timeLimitMultiplierLength = 0;
       while (timeLimitMultiplier >= 1) {
         timeLimitMultiplierLength++;
         timeLimitMultiplier /= 10;
       }
-      HoleEvaluator.validityLemmaNameStartCol = 30 + timeLimitMultiplierLength;
+      if (DafnyOptions.O.HoleEvaluatorServerIpPortList == null) {
+        Console.WriteLine("ip port list is not given. Please specify with /holeEvalServerIpPortList");
+        return null;
+      }
+      if (DafnyOptions.O.HoleEvaluatorCommands != null) {
+        var input = File.ReadAllText(DafnyOptions.O.HoleEvaluatorCommands);
+        tasksList = Google.Protobuf.JsonParser.Default.Parse<TasksList>(input);
+        foreach (var task in tasksList.Tasks) {
+          tasksListDictionary.Add(task.Path, task);
+        }
+      }
+      validityLemmaNameStartCol = 30 + timeLimitMultiplierLength;
+      dafnyVerifier = new DafnyVerifierClient(DafnyOptions.O.HoleEvaluatorServerIpPortList, $"output_{funcName}");
       UnderscoreStr = RandomString(8);
-      holeFinderExecutor.sw = Stopwatch.StartNew();
-      Function func = HoleEvaluator.GetFunction(program, funcName);
+      dafnyVerifier.sw = Stopwatch.StartNew();
+      Function baseFunc = HoleEvaluator.GetMember(program, baseFuncName) as Function;
+      if (baseFunc == null) {
+        Console.WriteLine($"couldn't find function {baseFuncName}. List of all functions:");
+        foreach (var kvp in program.ModuleSigs) {
+          foreach (var topLevelDecl in ModuleDefinition.AllFunctions(kvp.Value.ModuleDef.TopLevelDecls)) {
+            Console.WriteLine(topLevelDecl.FullDafnyName);
+          }
+        }
+        return null;
+      }
+      CG = HoleEvaluator.GetCallGraph(baseFunc);
+      Function func = HoleEvaluator.GetMember(program, funcName) as Function;
       if (func == null) {
         Console.WriteLine($"couldn't find function {funcName}. List of all functions:");
         foreach (var kvp in program.ModuleSigs) {
@@ -163,39 +154,26 @@ namespace Microsoft.Dafny {
         }
         return null;
       }
+      List<List<Tuple<Function, FunctionCallExpr, Expression>>> Paths =
+        new List<List<Tuple<Function, FunctionCallExpr, Expression>>>();
+      List<Tuple<Function, FunctionCallExpr, Expression>> CurrentPath =
+        new List<Tuple<Function, FunctionCallExpr, Expression>>();
+      CurrentPath.Add(new Tuple<Function, FunctionCallExpr, Expression>(baseFunc, null, null));
+      HoleEvaluator.GetAllPaths(CG, baseFunc, func, Paths, CurrentPath);
+      if (Paths.Count == 0)
+        Paths.Add(new List<Tuple<Function, FunctionCallExpr, Expression>>(CurrentPath));
+
       // calculate holeEvaluatorConstraint Invocation
       Function constraintFunc = null;
       if (DafnyOptions.O.HoleEvaluatorConstraint != null) {
-        constraintFunc = HoleEvaluator.GetFunction(program, DafnyOptions.O.HoleEvaluatorConstraint);
+        constraintFunc = HoleEvaluator.GetMember(program, DafnyOptions.O.HoleEvaluatorConstraint) as Function;
         if (constraintFunc == null) {
           Console.WriteLine($"constraint function {DafnyOptions.O.HoleEvaluatorConstraint} not found!");
           return null;
         }
       }
-      if (constraintFunc != null) {
-        Dictionary<string, HashSet<ExpressionFinder.ExpressionDepth>> typeToExpressionDictForInputs = new Dictionary<string, HashSet<ExpressionFinder.ExpressionDepth>>();
-        foreach (var formal in func.Formals) {
-          var identExpr = new ExpressionFinder.ExpressionDepth(Expression.CreateIdentExpr(formal), 1);
-          var typeString = formal.Type.ToString();
-          if (typeToExpressionDictForInputs.ContainsKey(typeString)) {
-            typeToExpressionDictForInputs[typeString].Add(identExpr);
-          } else {
-            var lst = new HashSet<ExpressionFinder.ExpressionDepth>();
-            lst.Add(identExpr);
-            typeToExpressionDictForInputs.Add(typeString, lst);
-          }
-        }
-        var funcCalls = ExpressionFinder.GetAllPossibleFunctionInvocations(program, constraintFunc, typeToExpressionDictForInputs);
-        foreach (var funcCall in funcCalls) {
-          if (constraintExpr == null) {
-            constraintExpr = funcCall;
-          } else {
-            constraintExpr.expr = Expression.CreateAnd(constraintExpr.expr, funcCall.expr);
-          }
-        }
-        Console.WriteLine($"constraint expr to be added : {Printer.ExprToString(constraintExpr.expr)}");
-      }
-      var CG = HoleEvaluator.GetCallGraph(func);
+      constraintExpr = HoleEvaluator.GetConstraintExpr(program, baseFunc, constraintFunc);
+
       Function nullFunc = new Function(
         func.tok, "nullFunc", func.HasStaticKeyword, func.IsGhost,
         func.TypeArgs, func.Formals, func.Result, func.ResultType,
@@ -211,28 +189,28 @@ namespace Microsoft.Dafny {
           }
         }
       }
-      holeFinderExecutor.startAndWaitUntilAllProcessesFinishAndDumpTheirOutputs();
+      // holeFinderExecutor.startAndWaitUntilAllProcessesFinishAndDumpTheirOutputs();
 
       // check if proof already goes through
-      var p = holeFinderExecutor.funcToProcess[nullFunc];
-      var output = holeFinderExecutor.dafnyOutput[p];
-      var fileName = holeFinderExecutor.inputFileName[p];
-      var position = holeFinderExecutor.processToPostConditionPosition[p];
-      var lemmaStartPosition = holeFinderExecutor.processToLemmaStartPosition[p];
-      var expectedOutput =
-        $"{DafnyOptions.O.HoleEvaluatorWorkingDirectory}{fileName}.dfy({position},0): Error: A postcondition might not hold on this return path.";
-      var expectedInconclusiveOutputStart = 
-        $"{DafnyOptions.O.HoleEvaluatorWorkingDirectory}{fileName}.dfy({lemmaStartPosition},{HoleEvaluator.validityLemmaNameStartCol}): Verification inconclusive";
-      Console.WriteLine(expectedInconclusiveOutputStart);
-      var nullChangeResult = DafnyExecutor.IsCorrectOutput(output, expectedOutput, expectedInconclusiveOutputStart);
-      if (nullChangeResult != Result.IncorrectProof) {
-        Console.WriteLine($"{holeFinderExecutor.sw.ElapsedMilliseconds / 1000}:: proof already goes through! {nullChangeResult.ToString()}");
-        return null;
-      }
-      if (dotGraphOutputPath == "")
-        dotGraphOutputPath = $"./callGraph_{func.Name}.dot";
-      PrintCallGraphWithPotentialBugInfo(CG, dotGraphOutputPath);
-      Console.WriteLine($"{holeFinderExecutor.sw.ElapsedMilliseconds / 1000}:: finish");
+      // var p = holeFinderExecutor.funcToProcess[nullFunc];
+      // var output = holeFinderExecutor.dafnyOutput[p];
+      // var fileName = holeFinderExecutor.inputFileName[p];
+      // var position = holeFinderExecutor.processToPostConditionPosition[p];
+      // var lemmaStartPosition = holeFinderExecutor.processToLemmaStartPosition[p];
+      // var expectedOutput =
+      //   $"{DafnyOptions.O.HoleEvaluatorWorkingDirectory}{fileName}.dfy({position},0): Error: A postcondition might not hold on this return path.";
+      // var expectedInconclusiveOutputStart = 
+      //   $"{DafnyOptions.O.HoleEvaluatorWorkingDirectory}{fileName}.dfy({lemmaStartPosition},{HoleEvaluator.validityLemmaNameStartCol}): Verification inconclusive";
+      // Console.WriteLine(expectedInconclusiveOutputStart);
+      // var nullChangeResult = DafnyExecutor.IsCorrectOutput(output, expectedOutput, expectedInconclusiveOutputStart);
+      // if (nullChangeResult != Result.IncorrectProof) {
+      //   Console.WriteLine($"{holeFinderExecutor.sw.ElapsedMilliseconds / 1000}:: proof already goes through! {nullChangeResult.ToString()}");
+      //   return null;
+      // }
+      // if (dotGraphOutputPath == "")
+      //   dotGraphOutputPath = $"./callGraph_{func.Name}.dot";
+      // PrintCallGraphWithPotentialBugInfo(CG, dotGraphOutputPath);
+      // Console.WriteLine($"{holeFinderExecutor.sw.ElapsedMilliseconds / 1000}:: finish");
       return null;
     }
   }

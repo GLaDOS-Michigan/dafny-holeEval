@@ -36,7 +36,7 @@ namespace Microsoft.Dafny {
     private Dictionary<string, VerificationTaskArgs> tasksListDictionary = new Dictionary<string, VerificationTaskArgs>();
     private IncludeParser includeParser = null;
 
-    public static Lemma GetLemma(Program program, string lemmaName) {
+    public static Lemma GetLemma(Program program, string lemmaName, bool sanitizedName = false) {
       foreach (var kvp in program.ModuleSigs) {
         foreach (var d in kvp.Value.ModuleDef.TopLevelDecls) {
           var cl = d as TopLevelDeclWithMembers;
@@ -44,7 +44,32 @@ namespace Microsoft.Dafny {
             foreach (var member in cl.Members) {
               var m = member as Lemma;
               if (m != null) {
-                if (m.FullDafnyName == lemmaName) {
+                if (!sanitizedName && m.FullDafnyName == lemmaName) {
+                  return m;
+                }
+                else if (sanitizedName && m.FullSanitizedName == lemmaName) {
+                  return m;
+                }
+              }
+            }
+          }
+        }
+      }
+      return null;
+    }
+
+    public static Lemma GetLemmaFromUnresolved(Program program, string lemmaName, bool sanitizedName) {
+      foreach (var kvp in program.ModuleSigs) {
+        foreach (var d in kvp.Value.ModuleDef.TopLevelDecls) {
+          var cl = d as TopLevelDeclWithMembers;
+          if (cl != null) {
+            foreach (var member in cl.Members) {
+              var m = member as Lemma;
+              if (m != null) {
+                if (!sanitizedName && m.FullDafnyName == lemmaName) {
+                  return m;
+                }
+                else if (sanitizedName && m.FullSanitizedName == lemmaName) {
                   return m;
                 }
               }
@@ -277,7 +302,7 @@ namespace Microsoft.Dafny {
             continue;
           }
           var ensuresPredicateName = HoleEvaluator.GetFullLemmaNameString(lemma.EnclosingClass.EnclosingModuleDefinition, Printer.ExprToString(appSuf.Lhs));
-          var ensuresPredicate = HoleEvaluator.GetFunction(program, ensuresPredicateName);
+          var ensuresPredicate = HoleEvaluator.GetMember(program, ensuresPredicateName) as Function;
           if (ensuresPredicate == null) {
             throw new NotSupportedException($"{ensuresPredicateName} not found");
           }
@@ -600,8 +625,8 @@ namespace Microsoft.Dafny {
       // return true;
       var statements = new List<ExpressionFinder.StatementDepth>();
       if (expressionDepth <= 1) {
-        var revealFinder = new RevealFinder(this);
-        statements.AddRange(revealFinder.GetRevealStatements(program).AsEnumerable());
+        var opaqueFunctionFinder = new OpaqueFunctionFinder();
+        statements.AddRange(opaqueFunctionFinder.GetRevealStatements(program));
       }
       var lemmaFinder = new LemmaFinder(this);
       var lemmaStatements = lemmaFinder.GetLemmaStatements(program, typeToExpressionDict, expressionDepth);

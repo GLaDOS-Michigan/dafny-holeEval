@@ -291,19 +291,26 @@ namespace Microsoft.Dafny {
       ProofEvaluator proofEvaluator = null;
       HoleEvaluator holeEvaluator = null;
       try {
+        if (DafnyOptions.O.CreateOpaqueFunc) {
+          var opaqueEvaluator = new OpaqueEvaluator();
+          Task<bool> result = opaqueEvaluator.Evaluate(dafnyProgram, dafnyUnresolvedProgram);
+          return result.Result ? ExitValue.SUCCESS : ExitValue.COMPILE_ERROR;
+        }
         if (DafnyOptions.O.FindHoleFromFunctionName != null) {
           var holeFinder = new HoleFinder();
-          Function holeFunc = null;
+          Task<Function> holeFunc = null;
           if (DafnyOptions.O.HoleEvaluatorRemoveFileLine != null) {
             holeFunc = holeFinder.FindHoleAfterRemoveFileLine(dafnyProgram,
                 DafnyOptions.O.HoleEvaluatorRemoveFileLine,
                 DafnyOptions.O.FindHoleFromFunctionName);
           } else {
-            holeFunc = holeFinder.FindHole(dafnyProgram,
-                DafnyOptions.O.FindHoleFromFunctionName);
+            throw new NotImplementedException();
+            // holeFunc = holeFinder.FindHole(dafnyProgram,
+            //     DafnyOptions.O.FindHoleFromFunctionName,
+            //     DafnyOptions.O.HoleEvaluatorBaseFunctionName);
           }
-          if (holeFunc != null) {
-            Console.WriteLine($"hole is at func :{holeFunc.FullDafnyName}");
+          if (holeFunc.Result != null) {
+            Console.WriteLine($"hole is at func :{holeFunc.Result.FullDafnyName}");
           }
           return ExitValue.SUCCESS;
         }

@@ -10,8 +10,16 @@ using Microsoft.Boogie;
 using IToken = Microsoft.Boogie.IToken;
 
 namespace Microsoft.Dafny {
-  class Cloner {
+  public class Cloner {
 
+    public virtual Program CloneProgram(Program p) {
+      // should be unresolved program
+      Contract.Assert(p.ModuleSigs.Count == 0);
+      Contract.Assert(p.CompileModules.Count == 0);
+      ModuleDecl nModule = CloneDeclaration(p.DefaultModule, ((LiteralModuleDecl)p.DefaultModule).ModuleDef) as ModuleDecl;
+      Program np = new Program(p.FullName, nModule, p.BuiltIns, p.reporter);
+      return np;
+    }
 
     public virtual ModuleDefinition CloneModuleDefinition(ModuleDefinition m, string name) {
       ModuleDefinition nw;

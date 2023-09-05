@@ -235,5 +235,92 @@ namespace Microsoft.Dafny {
         return false;
       }
     }
+
+    private static Statement GetStatementFromBlockStmt(BlockStmt blockStmt, int lineNo, int col) {
+      int i = 0;
+      for(i = 0; i < blockStmt.Body.Count; i++) {
+        if (blockStmt.Body[i].Tok.line <= lineNo && lineNo <= blockStmt.Body[i].EndTok.line) {
+          return GetStatement(blockStmt.Body[i], lineNo, col);
+        }
+      }
+      // Should never reach here
+      Contract.Assert(false);
+      return null;
+    }
+
+    private static Statement GetStatementFromIfStmt(IfStmt ifStmt, int lineNo, int col) {
+      if (lineNo <= ifStmt.Thn.Tok.line)
+      {
+          return ifStmt;
+      }
+      else if (ifStmt.Thn.Tok.line <= lineNo && lineNo <= ifStmt.Thn.EndTok.line) {
+        return GetStatementFromBlockStmt(ifStmt.Thn, lineNo, col);
+      }
+      else if (ifStmt.Els != null) {
+        return GetStatement(ifStmt.Els, lineNo, col);
+      }
+      return ifStmt;
+    }
+
+    private static Statement GetStatementFromForallStmt(ForallStmt forallStmt, int lineNo, int col) {
+      if (lineNo < forallStmt.Body.Tok.line || 
+          (lineNo == forallStmt.Body.Tok.line && col < forallStmt.Body.Tok.col)) {
+        return forallStmt;
+      }
+      else {
+        return GetStatement(forallStmt.Body, lineNo, col);
+      }
+    }
+
+    public static Statement GetStatement(Statement stmt, int lineNo, int col) {
+      Contract.Assert(stmt.Tok.line <= lineNo && lineNo <= stmt.EndTok.line);
+      // if (stmt.EndTok.line < lineNo) {
+      //   return null;
+      // }
+      if (stmt is BlockStmt) {
+        if (lineNo < (stmt as BlockStmt).Body[0].Tok.line) {
+          return stmt;
+        }
+        return GetStatementFromBlockStmt(stmt as BlockStmt, lineNo, col);
+      }
+      else if (stmt is IfStmt) {
+        return GetStatementFromIfStmt(stmt as IfStmt, lineNo, col);
+      }
+      else if (stmt is ForallStmt) {
+        return GetStatementFromForallStmt(stmt as ForallStmt, lineNo, col);
+      }
+      else {
+        return stmt;
+      }
+    }
+
+    public static IToken GetStartingToken(Expression expr) {
+      if (expr is ApplySuffix) {
+        return GetStartingToken((expr as ApplySuffix).Lhs);
+      }
+      else {
+        return expr.tok;
+      }
+    }
+
+    public static IToken GetStartingToken(Statement stmt) {
+      if (stmt is UpdateStmt) {
+        var updateStmt = stmt as UpdateStmt;
+        if (updateStmt.Lhss.Count > 0) {
+          return GetStartingToken(updateStmt.Lhss[0]);
+        }
+        else {
+          if (updateStmt.Rhss[0] is ExprRhs) {
+            return GetStartingToken((updateStmt.Rhss[0] as ExprRhs).Expr);
+          }
+          else {
+            throw new NotSupportedException();
+          }
+        }
+      }
+      else {
+        return stmt.Tok;
+      }
+    }
   }
 }

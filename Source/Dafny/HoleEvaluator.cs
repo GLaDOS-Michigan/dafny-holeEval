@@ -43,6 +43,34 @@ namespace Microsoft.Dafny {
     private List<UInt64> executionTimes = new List<UInt64>();
     private ExpressionFinder.ExpressionDepth constraintExpr = null;
 
+    public static ExpressionFinder.ExpressionDepth GetConstraintExpr(Program program, Function baseFunc, Function constraintFunc) {
+      ExpressionFinder.ExpressionDepth constraintExpr = null;
+      if (constraintFunc != null) {
+        Dictionary<string, HashSet<ExpressionFinder.ExpressionDepth>> typeToExpressionDictForInputs = new Dictionary<string, HashSet<ExpressionFinder.ExpressionDepth>>();
+        foreach (var formal in baseFunc.Formals) {
+          var identExpr = new ExpressionFinder.ExpressionDepth(Expression.CreateIdentExpr(formal), 1);
+          var typeString = formal.Type.ToString();
+          if (typeToExpressionDictForInputs.ContainsKey(typeString)) {
+            typeToExpressionDictForInputs[typeString].Add(identExpr);
+          } else {
+            var lst = new HashSet<ExpressionFinder.ExpressionDepth>();
+            lst.Add(identExpr);
+            typeToExpressionDictForInputs.Add(typeString, lst);
+          }
+        }
+        var funcCalls = ExpressionFinder.GetAllPossibleFunctionInvocations(program, constraintFunc, typeToExpressionDictForInputs);
+        foreach (var funcCall in funcCalls) {
+          if (constraintExpr == null) {
+            constraintExpr = new ExpressionFinder.ExpressionDepth(funcCall.expr, 1);
+          } else {
+            constraintExpr.expr = Expression.CreateAnd(constraintExpr.expr, funcCall.expr);
+          }
+        }
+        Console.WriteLine($"constraint expr to be added : {Printer.ExprToString(constraintExpr.expr)}");
+      }
+      return constraintExpr;
+    }
+
     public static bool IsGoodResult(Result result) {
       return (result == Result.CorrectProof ||
               result == Result.CorrectProofByTimeout ||
@@ -393,21 +421,23 @@ namespace Microsoft.Dafny {
     }
 
     DirectedCallGraph<Function, FunctionCallExpr, Expression> CG;
-    List<List<Tuple<Function, FunctionCallExpr, Expression>>> Paths =
-      new List<List<Tuple<Function, FunctionCallExpr, Expression>>>();
-    List<Tuple<Function, FunctionCallExpr, Expression>> CurrentPath =
-      new List<Tuple<Function, FunctionCallExpr, Expression>>();
+    // List<List<Tuple<Function, FunctionCallExpr, Expression>>> Paths =
+    //   new List<List<Tuple<Function, FunctionCallExpr, Expression>>>();
+    // List<Tuple<Function, FunctionCallExpr, Expression>> CurrentPath =
+      // new List<Tuple<Function, FunctionCallExpr, Expression>>();
 
-    public void GetAllPaths(Function source, Function destination) {
+    public static void GetAllPaths(DirectedCallGraph<Function, FunctionCallExpr, Expression> CG, Function source, Function destination,
+      List<List<Tuple<Function, FunctionCallExpr, Expression>>> AllPaths,
+      List<Tuple<Function, FunctionCallExpr, Expression>> CurrentPath) {
       if (source.FullDafnyName == destination.FullDafnyName) {
-        Paths.Add(new List<Tuple<Function, FunctionCallExpr, Expression>>(CurrentPath));
+        AllPaths.Add(new List<Tuple<Function, FunctionCallExpr, Expression>>(CurrentPath));
         return;
       }
       var neighbourWeightList = CG.AdjacencyWeightList[source];
       foreach (var nwPair in neighbourWeightList) {
         CurrentPath.Add(new Tuple<Function, FunctionCallExpr, Expression>(
           nwPair.Item1, nwPair.Item2, nwPair.Item3));
-        GetAllPaths(nwPair.Item1, destination);
+        GetAllPaths(CG, nwPair.Item1, destination, AllPaths, CurrentPath);
         CurrentPath.RemoveAt(CurrentPath.Count - 1);
       }
     }
@@ -672,7 +702,7 @@ namespace Microsoft.Dafny {
       if (baseFuncName == null) {
         baseFuncName = funcName;
       }
-      Function baseFunc = GetFunction(program, baseFuncName);
+      Function baseFunc = GetMember(program, baseFuncName) as Function;
       if (baseFunc == null) {
         Console.WriteLine($"couldn't find function {baseFuncName}. List of all functions:");
         foreach (var kvp in program.ModuleSigs) {
@@ -684,16 +714,21 @@ namespace Microsoft.Dafny {
       }
       Function constraintFunc = null;
       if (DafnyOptions.O.HoleEvaluatorConstraint != null) {
-        constraintFunc = GetFunction(program, DafnyOptions.O.HoleEvaluatorConstraint);
+        constraintFunc = GetMember(program, DafnyOptions.O.HoleEvaluatorConstraint) as Function;
         if (constraintFunc == null) {
           Console.WriteLine($"constraint function {DafnyOptions.O.HoleEvaluatorConstraint} not found!");
           return false;
         }
       }
       CG = GetCallGraph(baseFunc);
-      Function func = GetFunction(program, funcName);
+      Function func = GetMember(program, funcName) as Function;
+
+      List<List<Tuple<Function, FunctionCallExpr, Expression>>> Paths =
+        new List<List<Tuple<Function, FunctionCallExpr, Expression>>>();
+      List<Tuple<Function, FunctionCallExpr, Expression>> CurrentPath =
+        new List<Tuple<Function, FunctionCallExpr, Expression>>();
       CurrentPath.Add(new Tuple<Function, FunctionCallExpr, Expression>(baseFunc, null, null));
-      GetAllPaths(baseFunc, func);
+      GetAllPaths(CG, baseFunc, func, Paths, CurrentPath);
       if (Paths.Count == 0)
         Paths.Add(new List<Tuple<Function, FunctionCallExpr, Expression>>(CurrentPath));
       // foreach (var p in Paths) {
@@ -708,7 +743,7 @@ namespace Microsoft.Dafny {
       Function desiredFunction = null;
       Function desiredFunctionUnresolved = null;
       Function topLevelDeclCopy = null;
-      desiredFunction = GetFunction(program, funcName);
+      desiredFunction = GetMember(program, funcName) as Function;
       if (desiredFunction != null) {
         includeParser = new IncludeParser(program);
         var filename = includeParser.Normalized(desiredFunction.BodyStartTok.filename);
@@ -719,31 +754,10 @@ namespace Microsoft.Dafny {
         affectedFiles.Add(filename);
         affectedFiles = affectedFiles.Distinct().ToList();
         // calculate holeEvaluatorConstraint Invocation
-        if (constraintFunc != null) {
-          Dictionary<string, HashSet<ExpressionFinder.ExpressionDepth>> typeToExpressionDictForInputs = new Dictionary<string, HashSet<ExpressionFinder.ExpressionDepth>>();
-          foreach (var formal in baseFunc.Formals) {
-            var identExpr = new ExpressionFinder.ExpressionDepth(Expression.CreateIdentExpr(formal), 1);
-            var typeString = formal.Type.ToString();
-            if (typeToExpressionDictForInputs.ContainsKey(typeString)) {
-              typeToExpressionDictForInputs[typeString].Add(identExpr);
-            } else {
-              var lst = new HashSet<ExpressionFinder.ExpressionDepth>();
-              lst.Add(identExpr);
-              typeToExpressionDictForInputs.Add(typeString, lst);
-            }
-          }
-          var funcCalls = ExpressionFinder.GetAllPossibleFunctionInvocations(program, constraintFunc, typeToExpressionDictForInputs);
-          foreach (var funcCall in funcCalls) {
-            if (constraintExpr == null) {
-              constraintExpr = new ExpressionFinder.ExpressionDepth(funcCall.expr, 1);
-            } else {
-              constraintExpr.expr = Expression.CreateAnd(constraintExpr.expr, funcCall.expr);
-            }
-          }
-          Console.WriteLine($"constraint expr to be added : {Printer.ExprToString(constraintExpr.expr)}");
-        }
+        constraintExpr = GetConstraintExpr(program, baseFunc, constraintFunc);
+
         expressionFinder.CalcDepthOneAvailableExpresssionsFromFunction(program, desiredFunction);
-        desiredFunctionUnresolved = GetFunctionFromUnresolved(unresolvedProgram, funcName);
+        desiredFunctionUnresolved = GetMemberFromUnresolved(unresolvedProgram, funcName) as Function;
         if (DafnyOptions.O.HoleEvaluatorRemoveFileLine != null) {
           var fileLineList = DafnyOptions.O.HoleEvaluatorRemoveFileLine.Split(',');
           foreach (var fileLineString in fileLineList) {
@@ -863,9 +877,9 @@ namespace Microsoft.Dafny {
           case Result.Unknown: throw new NotSupportedException();
         }
       }
-      Console.WriteLine("{0,-15} {1,-15} {2,-15} {3,-15} {4, -25} {5, -15} {6, -15}",
+      Console.WriteLine("{0,-15} {1,-15} {2,-20} {3,-15} {4, -25} {5, -15} {6, -15}",
         "InvalidExpr", "IncorrectProof", "TriviallyCorrect", "CorrectProof", "CorrectProofByTimeout", "CorrectProofWOMaintain", "NoMatchingTrigger", "Total");
-      Console.WriteLine("{0,-15} {1,-15} {2,-15} {3,-15} {4, -25} {5, -25} {6, -15} {7, -15}",
+      Console.WriteLine("{0,-15} {1,-15} {2,-20} {3,-15} {4, -25} {5, -25} {6, -15} {7, -15}",
         invalidExprCount, incorrectProofCount, falsePredicateCount, correctProofCount, correctProofByTimeoutCount,
         correctProofWithoutMaintainCount, noMatchingTriggerCount, expressionFinder.availableExpressions.Count);
       string executionTimesSummary = "";
@@ -997,24 +1011,32 @@ namespace Microsoft.Dafny {
       return new Tuple<List<string>, string>(paramNames, parameterNameTypes);
     }
 
-    public static Function GetFunction(Program program, string funcName) {
+    public static MemberDecl GetMember(Program program, string memberName, bool sanitizedName = false) {
       foreach (var kvp in program.ModuleSigs) {
         foreach (var topLevelDecl in ModuleDefinition.AllFunctions(kvp.Value.ModuleDef.TopLevelDecls)) {
-          if (topLevelDecl.FullDafnyName == funcName) {
-            return topLevelDecl;
+          if (!sanitizedName && topLevelDecl.FullDafnyName == memberName) {
+            return topLevelDecl as MemberDecl;
+          }
+          else if (sanitizedName && topLevelDecl.FullSanitizedName == memberName) {
+            return topLevelDecl as MemberDecl;
           }
         }
-      }
-      return null;
-    }
-
-    public static Function GetFunctionFromModuleDef(ModuleDefinition moduleDef, string funcName) {
-      foreach (var topLevelDecl in moduleDef.TopLevelDecls) {
-        if (topLevelDecl is ClassDecl) {
-          var cd = topLevelDecl as ClassDecl;
-          foreach (var member in cd.Members) {
-            if ($"{cd.FullDafnyName}.{member.Name}" == funcName) {
-              return member as Function;
+        foreach (var topLevelDecl in ModuleDefinition.AllLemmas(kvp.Value.ModuleDef.TopLevelDecls)) {
+          if (!sanitizedName && topLevelDecl.FullDafnyName == memberName) {
+            return topLevelDecl as MemberDecl;
+          }
+          else if (sanitizedName && topLevelDecl.FullSanitizedName == memberName) {
+            return topLevelDecl as MemberDecl;
+          }
+        }
+        foreach (var icallable in ModuleDefinition.AllCallables(kvp.Value.ModuleDef.TopLevelDecls)) {
+          if (icallable is MemberDecl) {
+            var topLevelDecl = icallable as MemberDecl;
+            if (!sanitizedName && topLevelDecl.FullDafnyName == memberName) {
+              return topLevelDecl;
+            }
+            else if (sanitizedName && topLevelDecl.FullSanitizedName == memberName) {
+              return topLevelDecl;
             }
           }
         }
@@ -1022,15 +1044,29 @@ namespace Microsoft.Dafny {
       return null;
     }
 
-    public static Function GetFunctionFromUnresolved(Program program, string funcName) {
-      int index = funcName.LastIndexOf('.');
-      string moduleName = funcName.Remove(index);
+    public static MemberDecl GetMemberFromModuleDef(ModuleDefinition moduleDef, string funcName) {
+      foreach (var topLevelDecl in moduleDef.TopLevelDecls) {
+        if (topLevelDecl is ClassDecl) {
+          var cd = topLevelDecl as ClassDecl;
+          foreach (var member in cd.Members) {
+            if ($"{cd.FullDafnyName}.{member.Name}" == funcName) {
+              return member;
+            }
+          }
+        }
+      }
+      return null;
+    }
+
+    public static MemberDecl GetMemberFromUnresolved(Program program, string memberName) {
+      int index = memberName.IndexOf('.');
+      string moduleName = memberName.Remove(index);
       foreach (var topLevelDecl in program.DefaultModuleDef.TopLevelDecls) {
         if (topLevelDecl.FullDafnyName == moduleName) {
           var lmd = topLevelDecl as LiteralModuleDecl;
-          var func = GetFunctionFromModuleDef(lmd.ModuleDef, funcName);
-          if (func != null) {
-            return func;
+          var member = GetMemberFromModuleDef(lmd.ModuleDef, memberName);
+          if (member != null) {
+            return member;
           }
         }
       }
@@ -1062,7 +1098,8 @@ namespace Microsoft.Dafny {
     private int constraintFuncLineCount = 0;
     private List<string> mergedCode = new List<string>();
 
-    public void CheckMaintainState(Program program, ExpressionFinder.ExpressionDepth exprDepth, int index) {
+    public void CheckMaintainState(Program program, ExpressionFinder.ExpressionDepth exprDepth, int index,
+      List<List<Tuple<Function, FunctionCallExpr, Expression>>> Paths) {
       var funcName = workingFunc.Name;
       int lemmaForMaintainStatePosition = -1;
       int lemmaForMaintainStateStartPosition = -1;
@@ -1090,7 +1127,7 @@ namespace Microsoft.Dafny {
           }
           for(int i = 0; i < Paths[0].Count; i++) {
             // desiredFunctionUnresolved = GetFunctionFromUnresolved(unresolvedProgram, funcName);
-            var func = GetFunctionFromUnresolved(program, Paths[0][i].Item1.FullDafnyName);
+            var func = GetMemberFromUnresolved(program, Paths[0][i].Item1.FullDafnyName) as Function;
             Contract.Assert(func != null);
             if (includeParser.Normalized(func.tok.filename) == path) {
               for (int j = func.tok.line - 1; j < func.BodyEndTok.line; j++) {

@@ -37,13 +37,62 @@ namespace Microsoft.Dafny {
     private List<Queue<IMessage>> tasksQueuePerDepth = new List<Queue<IMessage>>();
     // private ConcurrentQueue<CloneAndVerifyRequest> workerThreadTaskQueue = new ConcurrentQueue<CloneAndVerifyRequest>();
     private BufferBlock<IMessage> tasksBuffer;
+    private bool freshTasksBuffer = false;
     private List<Task<int>> consumerTasks = new List<Task<int>>();
     private List<int> taskFinishedPerConsumer = new List<int>();
     private string OutputPrefix;
     private Random rand = new Random();
+
+    public class Change
+    {
+      public IToken StartTok;
+      public IToken EndTok;
+      public string Replacement;
+      public string StartString;
+      public string FileName
+      {
+        get { return StartTok.filename; }
+      }
+      public Change(IToken startTok, IToken endTok, string replacement, string startString)
+      {
+        this.StartTok = startTok;
+        this.EndTok = endTok;
+        this.Replacement = replacement;
+        this.StartString = startString;
+      }
+      public string ToJsonString() {
+        var str = $"{{\"StartTok\":{{\"line\":{StartTok.line},\"col\":{StartTok.col}}}";
+        str += $",\"EndTok\":{{\"line\":{EndTok.line},\"col\":{EndTok.col}}}";
+        str += $",\"Replacement\":\"{Replacement}\"}}";
+        return str;
+      }
+    }
+
+    public static bool AddFileToChangeList(ref Dictionary<string, List<Change>> changeList, Change change) {
+      if (!changeList.ContainsKey(change.FileName)) {
+        changeList[change.FileName] = new List<Change>();
+      }
+      for (int i = 0; i < changeList[change.FileName].Count; i++) {
+        if (changeList[change.FileName][i].StartTok.line <= change.StartTok.line && 
+            change.EndTok.line <= changeList[change.FileName][i].EndTok.line) {
+              return false;
+            }
+      }
+      int index;
+      for (index = 0; index < changeList[change.FileName].Count; index++) {
+        if (change.StartTok.line > changeList[change.FileName][index].EndTok.line) {
+          break;
+        }
+      }
+      // TODO(armin): check if the changes are exclusive
+      changeList[change.FileName].Insert(index, change);
+      return true;
+    }
+
     public DafnyVerifierClient(string serverIpPortFileName, string outputPrefix) {
       sentRequests = 0;
       OutputPrefix = outputPrefix;
+      sw = Stopwatch.StartNew();
 
       foreach (string line in System.IO.File.ReadLines(serverIpPortFileName)) {
         ServerIpPortList.Add(line);
@@ -73,6 +122,7 @@ namespace Microsoft.Dafny {
     }
     public void RestartConsumers() {
       tasksBuffer = new BufferBlock<IMessage>();
+      freshTasksBuffer = true;
       consumerTasks.Clear();
       // setting up consumers
       for (int i = 0; i < ConcurrentConsumerCount; i++) {
@@ -91,11 +141,17 @@ namespace Microsoft.Dafny {
     // requestToCall for verification requests
     public ConcurrentDictionary<IMessage, AsyncUnaryCall<VerificationResponse>> VRequestToCall =
       new ConcurrentDictionary<IMessage, AsyncUnaryCall<VerificationResponse>>();
+    // requestToCall for two stage verification requests
+    public ConcurrentDictionary<IMessage, AsyncUnaryCall<VerificationResponseList>> TSRequestToCall =
+      new ConcurrentDictionary<IMessage, AsyncUnaryCall<VerificationResponseList>>();
     public Dictionary<IMessage, int> requestToCnt = new Dictionary<IMessage, int>();
     public Dictionary<IMessage, int> requestToAvailableExprAIndex = new Dictionary<IMessage, int>();
     public Dictionary<IMessage, int> requestToAvailableExprBIndex = new Dictionary<IMessage, int>();
     public Dictionary<IMessage, int> requestToPostConditionPosition = new Dictionary<IMessage, int>();
     public Dictionary<IMessage, int> requestToLemmaStartPosition = new Dictionary<IMessage, int>();
+
+    public List<List<VerificationRequest>> EnvironmentSetupTasks = new List<List<VerificationRequest>>();
+    public List<List<VerificationRequest>> EnvironmentVerificationTasks = new List<List<VerificationRequest>>();
 
     public void InitializeBaseFoldersInRemoteServers(Program program, string commonPrefix) {
       Parallel.For(0, serversList.Count, new ParallelOptions { MaxDegreeOfParallelism = -1 },
@@ -118,7 +174,93 @@ namespace Microsoft.Dafny {
       // foreach (var file in program.DefaultModuleDef.Includes) {
       //   filesList.Add(file.CanonicalPath);
       // }
+    }
 
+    public int CreateEnvironment(IncludeParser includeParser, Dictionary<string, List<Change>> changeList) {
+      var env = new List<VerificationRequest>();
+      foreach (var fileChangesTuple in changeList) {
+        var code = File.ReadAllLines(fileChangesTuple.Key);
+        foreach (var change in fileChangesTuple.Value) {
+          var startTokLine = change.StartTok.line;
+          var startTokCol = change.StartTok.col;
+          startTokLine--;
+          startTokCol--;
+          var endTokLine = change.EndTok.line;
+          var endTokCol = change.EndTok.col;
+          endTokLine--;
+          endTokCol--;
+          if (change.StartString != "") {
+            while (startTokLine >= 0) {
+              var index = code[startTokLine].LastIndexOf(change.StartString, startTokCol);
+              if (index != -1) {
+                startTokCol = index;
+                break;
+              }
+              startTokLine--;
+              startTokCol = code[startTokLine].Length;
+            }
+            Contract.Assert(startTokLine >= 0);
+          }
+          code[startTokLine] = code[startTokLine].Substring(0, startTokCol) + change.Replacement.Replace("\n", " ");
+          for (int i = startTokLine + 1; i < endTokLine; i++) {
+            code[i] = "";
+          }
+          if (startTokLine != endTokLine && code[endTokLine].Length != 0) {
+            code[endTokLine] = code[endTokLine].Substring(endTokCol + 1);
+          }
+        }
+        VerificationRequest request = new VerificationRequest();
+        request.Code = String.Join('\n', code);
+        request.Path = includeParser.Normalized(fileChangesTuple.Key);
+        request.Timeout = "10s";
+        env.Add(request);
+      }
+      EnvironmentSetupTasks.Add(env);
+      EnvironmentVerificationTasks.Add(new List<VerificationRequest>());
+      return EnvironmentSetupTasks.Count - 1;
+    }
+
+    public void AddVerificationRequestToEnvironment(int envId, string code, string filename, List<string> args, string timeout = "1h") {
+      Contract.Assert(envId >= 0);
+      Contract.Assert(envId < EnvironmentVerificationTasks.Count);
+      VerificationRequest request = new VerificationRequest();
+      request.Code = code;
+      request.Path = filename;
+      request.Timeout = timeout;
+      foreach (var arg in args) {
+        request.Arguments.Add(arg);
+      }
+      EnvironmentVerificationTasks[envId].Add(request);
+    }
+
+    public void ResetVerificationTasksInEnvironment(int envId) {
+      Contract.Assert(envId >= 0);
+      Contract.Assert(envId < EnvironmentVerificationTasks.Count);
+      EnvironmentVerificationTasks[envId].Clear();
+    }
+
+    public async Task<bool> RunVerificationRequestsStartingFromEnvironment(int envId) {
+      for(int cnt = envId; cnt < EnvironmentSetupTasks.Count; cnt++) {
+        TwoStageRequest request = new TwoStageRequest();
+        var serverId = cnt % serversList.Count;
+        request.DirectoryPath = baseFoldersPath[serverId].Path;
+        foreach (var req in EnvironmentSetupTasks[cnt]) {
+          request.FirstStageRequestsList.Add(req);
+        }
+        foreach (var req in EnvironmentVerificationTasks[cnt]) {
+          request.SecondStageRequestsList.Add(req);
+        }
+        Contract.Assert(!requestsList.ContainsKey(cnt));
+        requestsList.Add(cnt, request);
+        tasksQueuePerDepth[0].Enqueue(request);
+        requestToCnt[request] = cnt;
+        dafnyOutput[request] = new VerificationResponseList();
+      }
+      if (!freshTasksBuffer) {
+        RestartConsumers();
+      }
+      var result = await startProofTasksAccordingToPriority();
+      return result;
     }
 
     public TmpFolder DuplicateAllFiles(int cnt, string changingFilePath) {
@@ -155,6 +297,100 @@ namespace Microsoft.Dafny {
       } else {
         return Result.IncorrectProof;
       }
+    }
+
+    public enum ImportType {
+      NoImport = 0,
+      CompleteImport = 1,
+      SpecifiedImport = 2
+    }
+
+    public static Tuple<ImportType, AliasModuleDecl> GetImportType(string name, ModuleDefinition moduleDef) {
+      foreach (var topLevelDecl in moduleDef.TopLevelDecls) {
+        if (topLevelDecl is AliasModuleDecl) {
+          var aliasModuleDecl = topLevelDecl as AliasModuleDecl;
+          if (aliasModuleDecl.Name == name) {
+            if (aliasModuleDecl.Exports.Count == 0) {
+              return new Tuple<ImportType, AliasModuleDecl>(ImportType.CompleteImport, null);
+            }
+            else {
+              return new Tuple<ImportType, AliasModuleDecl>(ImportType.SpecifiedImport, aliasModuleDecl);
+            }
+          }
+        }
+      }
+      return new Tuple<ImportType, AliasModuleDecl>(ImportType.NoImport, null);
+    }
+
+    public static IToken GetLastToken(Expression expr) {
+      if (expr is ApplySuffix) {
+        // cannot find the last parantheses. not included in the AST
+        return null;
+      }
+      else if (expr is ComprehensionExpr) {
+        return (expr as ComprehensionExpr).BodyEndTok;
+      } else if (expr is StmtExpr) {
+        return GetLastToken((expr as StmtExpr).E);
+      } else if (expr is ITEExpr) {
+        return GetLastToken((expr as ITEExpr).Els);
+      } else if (expr is MatchExpr) {
+        // cannot find the last bracelet. not included in the AST
+        return null;
+      } else if (expr is IdentifierExpr) {
+        return expr.tok;
+      } else {
+        throw new NotImplementedException();
+      }
+    }
+
+    public class ProofFailResult {
+      public string FuncBoogieName;
+      public int Line;
+      public int Column;
+
+      public ProofFailResult(string funcBoogieName, int line, int column) {
+        this.FuncBoogieName = funcBoogieName;
+        this.Line = line;
+        this.Column = column;
+      }
+    }
+
+    public static List<ProofFailResult> GetFailingFunctionResults(string filename, string output) {
+      List<ProofFailResult> res = new List<ProofFailResult>();
+      if (!output.EndsWith("0 errors\n")) {
+        var outputList = output.Split("\nVerifying ").ToList();
+        if (outputList[outputList.Count - 1].LastIndexOf("\nDafny program verifier") == -1) {
+          throw new NotSupportedException();
+        }
+        outputList.Add(outputList[outputList.Count - 1].Substring(outputList[outputList.Count - 1].LastIndexOf("\nDafny program verifier")));
+        outputList[outputList.Count - 2] = outputList[outputList.Count - 2].Substring(0, outputList[outputList.Count - 2].LastIndexOf("\nDafny program verifier"));
+        for (int i = 1; i < outputList.Count; i++) {
+          if (outputList[i].EndsWith("verified\n")) {
+            continue;
+          }
+          else {
+            var funcBoogieName = outputList[i].Substring(0, outputList[i].IndexOf(' '));
+            var errorsList = outputList[i].Split(filename);
+            for (int j = 1; j < errorsList.Length; j++) {
+              var error = errorsList[j];
+              if (error.Substring(error.IndexOf(')')).StartsWith("): Error"))
+              {
+                var lineColStrList = error.Substring(1, error.IndexOf(')') - 1).Split(',');
+                var line = Int32.Parse(lineColStrList[0]);
+                var col = Int32.Parse(lineColStrList[1]);
+                res.Add(new ProofFailResult(funcBoogieName, line, col));
+              }
+              else if (error.Substring(error.IndexOf(')')).StartsWith("): Verification out of resource")) {
+                var lineColStrList = error.Substring(1, error.IndexOf(')') - 1).Split(',');
+                var line = Int32.Parse(lineColStrList[0]);
+                var col = Int32.Parse(lineColStrList[1]);
+                res.Add(new ProofFailResult(funcBoogieName, line, col));
+              }
+            }
+          }
+        }
+      }
+      return res;
     }
 
     public void Cleanup() {
@@ -236,6 +472,7 @@ namespace Microsoft.Dafny {
 
     public async Task<int> ProcessRequestAsync(IReceivableSourceBlock<IMessage> source) {
       int tasksProcessed = 0;
+      int retries = 0;
       while (await source.OutputAvailableAsync()) {
         if (source.TryReceive(out IMessage request)) {
           start:
@@ -263,7 +500,7 @@ namespace Microsoft.Dafny {
               // CheckIfCorrectAnswer(request, response);
               dafnyOutput[request] = response;
             }
-            else {
+            else if (request is CloneAndVerifyRequest) {
               if (!CAVRequestToCall.ContainsKey(request)) {
                 RestartTask(request);
               }
@@ -284,12 +521,39 @@ namespace Microsoft.Dafny {
               // CheckIfCorrectAnswer(request, response);
               dafnyOutput[request] = response;
             }
-            
+            else if (request is TwoStageRequest) {
+              if (!TSRequestToCall.ContainsKey(request)) {
+                RestartTask(request);
+              }
+              // Console.WriteLine($"calling await for #{requestToCnt[request]}");
+              VerificationResponseList response = await TSRequestToCall[request];
+              // Console.WriteLine($"finished await for #{requestToCnt[request]}");
+              if (DafnyOptions.O.HoleEvaluatorDumpOutput) {
+                output = $"{response.ExecutionTimeInMs.ToString()}\n";
+                for (int i = 0; i < response.ResponseList.Count; i++) {
+                  output = output + $"{i}:\t{response.ResponseList[i].Response.ToStringUtf8()}\n";
+                }
+                await File.WriteAllTextAsync($"{DafnyOptions.O.HoleEvaluatorWorkingDirectory}{requestToCnt[request]}_0.txt",
+                request.ToString());
+                await File.WriteAllTextAsync($"{DafnyOptions.O.HoleEvaluatorWorkingDirectory}{OutputPrefix}_{requestToCnt[request]}_0.txt",
+                  (requestToExpr.ContainsKey(request) ? "// " + Printer.ExprToString(requestToExpr[request]) + "\n" : "") +
+                  (requestToCnt.ContainsKey(request) ? "// " + requestToCnt[request] + "\n" : "") + output + "\n");
+              }
+              // CheckIfCorrectAnswer(request, response);
+              dafnyOutput[request] = response;
+            }
+            else {
+              throw new NotImplementedException();
+            }
+
             // Console.WriteLine($"finish executing {requestToCnt[request]}");
           } catch (RpcException ex) {
             Console.WriteLine($"{sw.ElapsedMilliseconds / 1000}:: Restarting task #{requestToCnt[request]} {ex.Message}");
-            RestartTask(request);
-            goto start;
+            if (retries < 5) {
+              RestartTask(request);
+              retries++;
+              goto start;
+            }
           }
           tasksProcessed++;
         }
@@ -311,6 +575,7 @@ namespace Microsoft.Dafny {
       for (int i = 0; i < ConcurrentConsumerCount; i++) {
         taskFinishedPerConsumer.Add(await consumerTasks[i]);
       }
+      freshTasksBuffer = false;
       // for (int i = 0; i < ConcurrentConsumerCount; i++) {
       //   Console.WriteLine($"Consumer #{i} finished {taskFinishedPerConsumer[i]} tasks");
       // }
@@ -328,11 +593,16 @@ namespace Microsoft.Dafny {
         CAVRequestToCall[request] = task;
       }
       else if (request is VerificationRequest) {
-        // Console.WriteLine($"sending request {(request as VerificationRequest).Path}");
         AsyncUnaryCall<VerificationResponse> task = serversList[serverId].VerifyAsync(
           request as VerificationRequest,
           deadline: DateTime.UtcNow.AddMinutes(30000));
         VRequestToCall[request] = task;
+      }
+      else if (request is TwoStageRequest) {
+        AsyncUnaryCall<VerificationResponseList> task = serversList[serverId].TwoStageVerifyAsync(
+          request as TwoStageRequest,
+          deadline: DateTime.UtcNow.AddMinutes(30000));
+        TSRequestToCall[request] = task;
       }
       else {
         throw new NotSupportedException($"invalid request type : {request.ToString()}");
