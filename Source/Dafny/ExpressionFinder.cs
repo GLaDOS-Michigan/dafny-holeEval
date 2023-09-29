@@ -538,7 +538,7 @@ namespace Microsoft.Dafny {
         foreach (var arg in arguments) {
           bindings.Add(new ActualBinding(null, arg));
         }
-        var applySuffixExpr = new ApplySuffix(ctor.tok, null, new NameSegment(ctor.tok, ctor.Name, null), bindings);
+        var applySuffixExpr = new ApplySuffix(ctor.tok, null, new NameSegment(ctor.tok, ctor.Name, null), bindings, ctor.tok);
         applySuffixExpr.Type = ty;
         yield return applySuffixExpr;
         yield break;
@@ -619,7 +619,7 @@ namespace Microsoft.Dafny {
           bindings.Add(new ActualBinding(null, arg.expr));
           depth = Math.Max(depth, arg.depth);
         }
-        var applySuffixExpr = new ApplySuffix(func.tok, null, new IdentifierExpr(func.tok, func.FullDafnyName), bindings);
+        var applySuffixExpr = new ApplySuffix(func.tok, null, new IdentifierExpr(func.tok, func.FullDafnyName), bindings, func.tok);
         applySuffixExpr.Type = func.ResultType;
         yield return new ExpressionDepth(applySuffixExpr, depth);
         yield break;

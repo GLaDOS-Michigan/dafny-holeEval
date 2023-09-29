@@ -41,6 +41,7 @@ namespace Microsoft.Dafny {
     private List<Task<int>> consumerTasks = new List<Task<int>>();
     private List<int> taskFinishedPerConsumer = new List<int>();
     private string OutputPrefix;
+    public Func<int, bool> OutputProcessorFunc;
     private Random rand = new Random();
 
     public class Change
@@ -89,9 +90,10 @@ namespace Microsoft.Dafny {
       return true;
     }
 
-    public DafnyVerifierClient(string serverIpPortFileName, string outputPrefix) {
+    public DafnyVerifierClient(string serverIpPortFileName, string outputPrefix, Func<int, bool> outputProcessorFunc = null) {
       sentRequests = 0;
       OutputPrefix = outputPrefix;
+      OutputProcessorFunc = outputProcessorFunc;
       sw = Stopwatch.StartNew();
 
       foreach (string line in System.IO.File.ReadLines(serverIpPortFileName)) {
@@ -239,11 +241,12 @@ namespace Microsoft.Dafny {
       EnvironmentVerificationTasks[envId].Clear();
     }
 
-    public async Task<bool> RunVerificationRequestsStartingFromEnvironment(int envId) {
+    public async Task<bool> RunVerificationRequestsStartingFromEnvironment(int envId, bool runExclusive) {
       for(int cnt = envId; cnt < EnvironmentSetupTasks.Count; cnt++) {
         TwoStageRequest request = new TwoStageRequest();
         var serverId = cnt % serversList.Count;
         request.DirectoryPath = baseFoldersPath[serverId].Path;
+        request.RunExclusive = runExclusive;
         foreach (var req in EnvironmentSetupTasks[cnt]) {
           request.FirstStageRequestsList.Add(req);
         }
@@ -292,7 +295,7 @@ namespace Microsoft.Dafny {
     }
 
     public static Result IsCorrectOutputForNoErrors(string output) {
-      if (output.EndsWith("0 errors\n")) {
+      if (output.EndsWith(" 0 errors\n")) {
         return Result.CorrectProof;
       } else {
         return Result.IncorrectProof;
@@ -306,6 +309,9 @@ namespace Microsoft.Dafny {
     }
 
     public static Tuple<ImportType, AliasModuleDecl> GetImportType(string name, ModuleDefinition moduleDef) {
+      if (moduleDef.FullDafnyName == name) {
+        return new Tuple<ImportType, AliasModuleDecl>(ImportType.CompleteImport, null);
+      }
       foreach (var topLevelDecl in moduleDef.TopLevelDecls) {
         if (topLevelDecl is AliasModuleDecl) {
           var aliasModuleDecl = topLevelDecl as AliasModuleDecl;
@@ -322,12 +328,49 @@ namespace Microsoft.Dafny {
       return new Tuple<ImportType, AliasModuleDecl>(ImportType.NoImport, null);
     }
 
-    public static IToken GetLastToken(Expression expr) {
+    public static IToken GetFirstToken(Expression expr) {
       if (expr is ApplySuffix) {
-        // cannot find the last parantheses. not included in the AST
-        return null;
+        return GetFirstToken((expr as ApplySuffix).Lhs);
       }
       else if (expr is ComprehensionExpr) {
+        return (expr as ComprehensionExpr).BodyStartTok;
+      } else if (expr is StmtExpr) {
+        return (expr as StmtExpr).S.Tok;
+      } else if (expr is ITEExpr) {
+        return expr.tok;
+      } else if (expr is MatchExpr) {
+        // cannot find the last bracelet. not included in the AST
+        return null;
+      } else if (expr is IdentifierExpr) {
+        return expr.tok;
+      } else if (expr is UnaryOpExpr) {
+        return (expr as UnaryExpr).tok;
+      } else if (expr is BinaryExpr) {
+        return GetFirstToken((expr as BinaryExpr).E0);
+      } else if (expr is LiteralExpr) {
+        return expr.tok;
+      } else if (expr is ChainingExpression) {
+        var chainExpr = expr as ChainingExpression;
+        return GetFirstToken(chainExpr.Operands[0]);
+      } else if (expr is NameSegment) {
+        return expr.tok;
+      } else if (expr is ExprDotName) {
+        return GetFirstToken((expr as ExprDotName).Lhs);
+      } else if (expr is LetExpr) {
+        return expr.tok;
+      } else if (expr is ParensExpression) {
+        return expr.tok;
+      } else {
+        Console.WriteLine($"do not support GetFirstToken for {Printer.ExprToString(expr)} of type {expr.GetType()}");
+        return null;
+        // throw new NotImplementedException($"do not support GetFirstToken for {Printer.ExprToString(expr)} of type {expr.GetType()}");
+      }
+    }
+
+    public static IToken GetLastToken(Expression expr) {
+      if (expr is ApplySuffix) {
+        return (expr as ApplySuffix).CloseParanthesisToken;
+      } else if (expr is ComprehensionExpr) {
         return (expr as ComprehensionExpr).BodyEndTok;
       } else if (expr is StmtExpr) {
         return GetLastToken((expr as StmtExpr).E);
@@ -338,8 +381,27 @@ namespace Microsoft.Dafny {
         return null;
       } else if (expr is IdentifierExpr) {
         return expr.tok;
+      } else if (expr is UnaryExpr) {
+        // cannot find the last bracelet. not included in the AST
+        return null;
+      } else if (expr is BinaryExpr) {
+        return GetLastToken((expr as BinaryExpr).E1);
+      } else if (expr is LiteralExpr) {
+        return expr.tok;
+      } else if (expr is ChainingExpression) {
+        var chainExpr = expr as ChainingExpression;
+        return GetLastToken(chainExpr.Operands[chainExpr.Operands.Count - 1]);
+      } else if (expr is NameSegment) {
+        return expr.tok;
+      } else if (expr is ExprDotName) {
+        return expr.tok;
+      } else if (expr is LetExpr) {
+        return GetLastToken((expr as LetExpr).Body);
+      } else if (expr is ParensExpression) {
+        return (expr as ParensExpression).CloseParenthesisTok;
       } else {
-        throw new NotImplementedException();
+        Console.WriteLine($"do not support GetLastToken for {Printer.ExprToString(expr)} of type {expr.GetType()}");
+        return null;
       }
     }
 
@@ -357,13 +419,15 @@ namespace Microsoft.Dafny {
 
     public static List<ProofFailResult> GetFailingFunctionResults(string filename, string output) {
       List<ProofFailResult> res = new List<ProofFailResult>();
-      if (!output.EndsWith("0 errors\n")) {
+      if (!output.EndsWith(" 0 errors\n")) {
         var outputList = output.Split("\nVerifying ").ToList();
-        if (outputList[outputList.Count - 1].LastIndexOf("\nDafny program verifier") == -1) {
-          throw new NotSupportedException();
+        if (outputList[outputList.Count - 1].LastIndexOf("\nDafny program verifier") != -1) {
+          // Console.WriteLine($"do not support parsing: {outputList[outputList.Count - 1]}");
+          // Console.WriteLine("will skip this function");
+          // return null;
+          outputList.Add(outputList[outputList.Count - 1].Substring(outputList[outputList.Count - 1].LastIndexOf("\nDafny program verifier")));
+          outputList[outputList.Count - 2] = outputList[outputList.Count - 2].Substring(0, outputList[outputList.Count - 2].LastIndexOf("\nDafny program verifier"));
         }
-        outputList.Add(outputList[outputList.Count - 1].Substring(outputList[outputList.Count - 1].LastIndexOf("\nDafny program verifier")));
-        outputList[outputList.Count - 2] = outputList[outputList.Count - 2].Substring(0, outputList[outputList.Count - 2].LastIndexOf("\nDafny program verifier"));
         for (int i = 1; i < outputList.Count; i++) {
           if (outputList[i].EndsWith("verified\n")) {
             continue;
@@ -373,14 +437,10 @@ namespace Microsoft.Dafny {
             var errorsList = outputList[i].Split(filename);
             for (int j = 1; j < errorsList.Length; j++) {
               var error = errorsList[j];
-              if (error.Substring(error.IndexOf(')')).StartsWith("): Error"))
+              if (error.Substring(error.IndexOf(')')).StartsWith("): Error") ||
+                  error.Substring(error.IndexOf(')')).StartsWith("): Verification out of resource") ||
+                  error.Substring(error.IndexOf(')')).StartsWith("): Verification inconclusive"))
               {
-                var lineColStrList = error.Substring(1, error.IndexOf(')') - 1).Split(',');
-                var line = Int32.Parse(lineColStrList[0]);
-                var col = Int32.Parse(lineColStrList[1]);
-                res.Add(new ProofFailResult(funcBoogieName, line, col));
-              }
-              else if (error.Substring(error.IndexOf(')')).StartsWith("): Verification out of resource")) {
                 var lineColStrList = error.Substring(1, error.IndexOf(')') - 1).Split(',');
                 var line = Int32.Parse(lineColStrList[0]);
                 var col = Int32.Parse(lineColStrList[1]);
@@ -497,8 +557,10 @@ namespace Microsoft.Dafny {
                   (requestToExpr.ContainsKey(request) ? "// " + Printer.ExprToString(requestToExpr[request]) + "\n" : "") +
                   (requestToCnt.ContainsKey(request) ? "// " + requestToCnt[request] + "\n" : "") + output + "\n");
               }
-              // CheckIfCorrectAnswer(request, response);
               dafnyOutput[request] = response;
+              if (OutputProcessorFunc != null) {
+                OutputProcessorFunc(requestToCnt[request]);
+              }
             }
             else if (request is CloneAndVerifyRequest) {
               if (!CAVRequestToCall.ContainsKey(request)) {
@@ -518,8 +580,10 @@ namespace Microsoft.Dafny {
                   (requestToExpr.ContainsKey(request) ? "// " + Printer.ExprToString(requestToExpr[request]) + "\n" : "") +
                   (requestToCnt.ContainsKey(request) ? "// " + requestToCnt[request] + "\n" : "") + output + "\n");
               }
-              // CheckIfCorrectAnswer(request, response);
               dafnyOutput[request] = response;
+              if (OutputProcessorFunc != null) {
+                OutputProcessorFunc(requestToCnt[request]);
+              }
             }
             else if (request is TwoStageRequest) {
               if (!TSRequestToCall.ContainsKey(request)) {
@@ -539,8 +603,10 @@ namespace Microsoft.Dafny {
                   (requestToExpr.ContainsKey(request) ? "// " + Printer.ExprToString(requestToExpr[request]) + "\n" : "") +
                   (requestToCnt.ContainsKey(request) ? "// " + requestToCnt[request] + "\n" : "") + output + "\n");
               }
-              // CheckIfCorrectAnswer(request, response);
               dafnyOutput[request] = response;
+              if (OutputProcessorFunc != null) {
+                OutputProcessorFunc(requestToCnt[request]);
+              }
             }
             else {
               throw new NotImplementedException();

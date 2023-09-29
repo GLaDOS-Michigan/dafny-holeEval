@@ -13046,7 +13046,7 @@ namespace Microsoft.Dafny {
     }
 
     private Expression VarDotMethod(IToken tok, string varname, string methodname) {
-      return new ApplySuffix(tok, null, new ExprDotName(tok, new IdentifierExpr(tok, varname), methodname, null), new List<ActualBinding>());
+      return new ApplySuffix(tok, null, new ExprDotName(tok, new IdentifierExpr(tok, varname), methodname, null), new List<ActualBinding>(), tok);
     }
 
     private Expression makeTemp(String prefix, AssignOrReturnStmt s, ICodeContext codeContext, Expression ex) {
@@ -15327,7 +15327,7 @@ namespace Microsoft.Dafny {
     }
 
     private Expression VarDotFunction(IToken tok, string varname, string functionname) {
-      return new ApplySuffix(tok, null, new ExprDotName(tok, new IdentifierExpr(tok, varname), functionname, null), new List<ActualBinding>());
+      return new ApplySuffix(tok, null, new ExprDotName(tok, new IdentifierExpr(tok, varname), functionname, null), new List<ActualBinding>(), tok);
     }
 
     // TODO search for occurrences of "new LetExpr" which could benefit from this helper

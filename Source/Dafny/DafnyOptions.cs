@@ -161,6 +161,7 @@ namespace Microsoft.Dafny {
     public string HoleEvaluatorSpecifiedFunc = "";
     public bool HoleEvaluatorIncludeFunctionInvocations = false;
     public string ProofEvaluatorExcludeDir = null;
+    public string HoleEvaluatorLogOutputs = "";
 
     protected override bool ParseOption(string name, Bpl.CommandLineOptionEngine.CommandLineParseState ps) {
       var args = ps.args; // convenient synonym
@@ -639,6 +640,12 @@ namespace Microsoft.Dafny {
         case "proofEvalExcludeDir":
           if (ps.ConfirmArgumentCount(1)) {
             ProofEvaluatorExcludeDir = args[ps.i];
+          }
+          return true;
+        
+        case "holeEvalLogOutputs":
+          if (ps.ConfirmArgumentCount(1)) {
+            HoleEvaluatorLogOutputs = args[ps.i];
           }
           return true;
 

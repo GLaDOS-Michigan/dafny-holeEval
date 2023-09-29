@@ -495,7 +495,7 @@ namespace Microsoft.Dafny {
     }
 
     public virtual Expression CloneApplySuffix(ApplySuffix e) {
-      return new ApplySuffix(Tok(e.tok), e.AtTok == null ? null : Tok(e.AtTok), CloneExpr(e.Lhs), e.Bindings.ArgumentBindings.ConvertAll(CloneActualBinding));
+      return new ApplySuffix(Tok(e.tok), e.AtTok == null ? null : Tok(e.AtTok), CloneExpr(e.Lhs), e.Bindings.ArgumentBindings.ConvertAll(CloneActualBinding), Tok(e.CloseParanthesisToken));
     }
 
     public virtual CasePattern<VT> CloneCasePattern<VT>(CasePattern<VT> pat) where VT : IVariable {
@@ -1152,7 +1152,7 @@ namespace Microsoft.Dafny {
       foreach (var arg in e.Bindings.ArgumentBindings) {
         args.Add(CloneActualBinding(arg));
       }
-      var apply = new ApplySuffix(Tok(e.tok), e.AtTok == null ? null : Tok(e.AtTok), lhs, args);
+      var apply = new ApplySuffix(Tok(e.tok), e.AtTok == null ? null : Tok(e.AtTok), lhs, args, Tok(e.CloseParanthesisToken));
       reporter.Info(MessageSource.Cloner, e.tok, name + suffix);
       return apply;
     }
@@ -1353,7 +1353,7 @@ namespace Microsoft.Dafny {
           var args = new List<ActualBinding>();
           args.Add(new ActualBinding(null, k));
           apply.Bindings.ArgumentBindings.ForEach(arg => args.Add(CloneActualBinding(arg)));
-          var applyClone = new ApplySuffix(Tok(apply.tok), apply.AtTok == null ? null : Tok(apply.AtTok), lhsClone, args);
+          var applyClone = new ApplySuffix(Tok(apply.tok), apply.AtTok == null ? null : Tok(apply.AtTok), lhsClone, args, Tok(apply.CloseParanthesisToken));
           var c = new ExprRhs(applyClone);
           reporter.Info(MessageSource.Cloner, apply.Lhs.tok, mse.Member.Name + suffix);
           return c;

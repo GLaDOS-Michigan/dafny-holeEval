@@ -31,6 +31,10 @@ namespace Microsoft.Dafny {
     public string Normalized(string path)
     {
       path = path.Remove(0, commonPrefixLength);
+      var bracketIndex = path.IndexOf('[');
+      if (bracketIndex != -1) {
+        path = path.Remove(bracketIndex);
+      }
       var directoryList = path.Split('/').ToList();
       for (int i = 0; i < directoryList.Count; i++) {
         if (directoryList[i] == "..") {
@@ -68,11 +72,11 @@ namespace Microsoft.Dafny {
     }
 
     public IEnumerable<string> GetListOfAffectedFilesBy(string file) {
+      yield return file;
       if (!affectedFilesList.ContainsKey(file)) {
         yield break;
       }
       foreach (var affected in affectedFilesList[file]) {
-        yield return affected;
         foreach (var x in GetListOfAffectedFilesBy(affected)) {
           yield return x;
         }

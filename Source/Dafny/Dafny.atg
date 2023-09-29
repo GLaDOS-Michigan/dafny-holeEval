@@ -3866,17 +3866,17 @@ LambdaSpec<.ref List<FrameExpression> reads, ref Expression req.>
 
 /*------------------------------------------------------------------------*/
 ParensExpression<out Expression e>
-= (. IToken x;
+= (. IToken x, closeParen;
      var args = new List<ActualBinding>();
   .)
   "("                                        (. x = t; .)
   [ TupleArgs<args> ]
-  ")"
+  ")"                                        (. closeParen = t; .)
   (. if (args.Count == 1 && !args[0].IsGhost) {
        if (args[0].FormalParameterName != null) {
          SemErr(args[0].FormalParameterName, "binding not allowed in parenthesized expression");
        }
-       e = new ParensExpression(x, args[0].Actual);
+       e = new ParensExpression(x, closeParen, args[0].Actual);
      } else {
        // Compute the actual position of ghost arguments
        var ghostness = new bool[args.Count];
@@ -4278,21 +4278,21 @@ CasePatternLocal<.out CasePattern<LocalVariable> pat, bool isGhost.>
 /*------------------------------------------------------------------------*/
 NameSegment<out Expression e>
 = (. IToken id;
-     IToken openParen = null; IToken atLabel = null;
+     IToken openParen = null; IToken atLabel = null; IToken closeParen = null;
      List<Type> typeArgs = null; List<ActualBinding> args = null;
   .)
   Ident<out id>
   ( IF(IsGenericInstantiation(true))
     (. typeArgs = new List<Type>(); .)
     GenericInstantiation<typeArgs>
-    [ AtCall<out atLabel, out openParen, out args> ]
-  | HashCall<id, out openParen, out typeArgs, out args>
-  | [ AtCall<out atLabel, out openParen, out args> ]
+    [ AtCall<out atLabel, out openParen, out closeParen, out args> ]
+  | HashCall<id, out openParen, out closeParen, out typeArgs, out args>
+  | [ AtCall<out atLabel, out openParen, out closeParen, out args> ]
   )
   /* Note, since HashCall updates id.val, we make sure not to use id.val until after the possibility of calling HashCall. */
   (. e = new NameSegment(id, id.val, typeArgs);
      if (openParen != null) {
-       e = new ApplySuffix(openParen, atLabel, e, args);
+       e = new ApplySuffix(openParen, atLabel, e, args, closeParen);
      } else {
        Contract.Assert(atLabel == null);
      }
@@ -4319,7 +4319,7 @@ NameSegmentForTypeName<out Expression e, bool inExpressionContext>
  * expression, just like for other function applications.
  * Note: This grammar production mutates the id.val field to append the hash sign.
  */
-HashCall<.IToken id, out IToken openParen, out List<Type> typeArgs, out List<ActualBinding> args.>
+HashCall<.IToken id, out IToken openParen, out IToken closeParen, out List<Type> typeArgs, out List<ActualBinding> args.>
 = (. Expression k; args = new List<ActualBinding>(); typeArgs = null; .)
   "#"                                      (. id.val = id.val + "#"; .)
   [                                        (. typeArgs = new List<Type>(); .)
@@ -4328,11 +4328,11 @@ HashCall<.IToken id, out IToken openParen, out List<Type> typeArgs, out List<Act
   "[" Expression<out k, true, true> "]"    (. args.Add(new ActualBinding(null, k)); .)
   "("                                      (. openParen = t; .)
     [ ActualBindings<args> ]
-  ")"
+  ")"                                      (. closeParen = t; .)
   .
 
 /*------------------------------------------------------------------------*/
-AtCall<.out IToken atLabel, out IToken openParen, out List<ActualBinding> args.>
+AtCall<.out IToken atLabel, out IToken openParen, out IToken closeParen, out List<ActualBinding> args.>
 = (. atLabel = null;
      openParen = null;
      args = new List<ActualBinding>();
@@ -4340,7 +4340,7 @@ AtCall<.out IToken atLabel, out IToken openParen, out List<ActualBinding> args.>
   "@" LabelName<out atLabel>
   "("                                      (. openParen = t; .)
     [ ActualBindings<args> ]
-  ")"
+  ")"                                      (. closeParen = t; .)
   .
 
 /*------------------------------------------------------------------------*/
@@ -4365,7 +4365,7 @@ Suffix<ref Expression e>
                                                     e = new ExprDotName(id, e, id.val, null);
                                                     id = x;  // move to the next Suffix
                                                   }
-                                                  IToken openParen = null;  List<Type> typeArgs = null;
+                                                  IToken openParen = null;  IToken closeParen = null; List<Type> typeArgs = null;
                                                   List<ActualBinding> args = null;
                                                   IToken atLabel = null;
                                                .)
@@ -4373,13 +4373,13 @@ Suffix<ref Expression e>
       ( IF(IsGenericInstantiation(true))
         (. typeArgs = new List<Type>(); .)
         GenericInstantiation<typeArgs>
-        [ AtCall<out atLabel, out openParen, out args> ]
-      | HashCall<id, out openParen, out typeArgs, out args>
-      | [ AtCall<out atLabel, out openParen, out args> ]
+        [ AtCall<out atLabel, out openParen, out closeParen, out args> ]
+      | HashCall<id, out openParen, out closeParen, out typeArgs, out args>
+      | [ AtCall<out atLabel, out openParen, out closeParen, out args> ]
       )
       (. e = new ExprDotName(id, e, id.val, typeArgs);
          if (openParen != null) {
-           e = new ApplySuffix(openParen, atLabel, e, args);
+           e = new ApplySuffix(openParen, atLabel, e, args, closeParen);
          } else {
            Contract.Assert(atLabel == null);
          }
@@ -4453,7 +4453,7 @@ Suffix<ref Expression e>
     "]"
   | "("                                    (. IToken openParen = t; var args = new List<ActualBinding>(); .)
     [ ActualBindings<args> ]
-    ")"                                    (. e = new ApplySuffix(openParen, null, e, args); .)
+    ")"                                    (. IToken closeParen = t; e = new ApplySuffix(openParen, null, e, args, closeParen); .)
   )
   .
 
