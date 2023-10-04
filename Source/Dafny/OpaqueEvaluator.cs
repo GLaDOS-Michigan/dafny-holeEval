@@ -338,12 +338,33 @@ namespace Microsoft.Dafny {
                                 DafnyVerifierClient.AddFileToChangeList(ref changeList, change);
                             }
                             else if (resolvedFailedFunc != null && resolvedFailedFunc is Lemma) {
-                                
                                 var unresolvedFailedLemma = HoleEvaluator.GetMemberFromUnresolved(unresolvedProgram, resolvedFailedFunc.FullDafnyName) as Lemma;
-                                if (failedProof.Line < unresolvedFailedLemma.Body.Tok.line || retries >= 1) {
-                                    var newLemmaBodyStr = $"{{reveal_{opaquedFunc.Name}();\n{Printer.StatementToString(unresolvedFailedLemma.Body)}\n}}";
-                                    Change change = new Change(unresolvedFailedLemma.Body.Tok, unresolvedFailedLemma.Body.EndTok, newLemmaBodyStr, "");
-                                    DafnyVerifierClient.AddFileToChangeList(ref changeList, change);
+                                if (failedProof.Line < unresolvedFailedLemma.Body.Tok.line || retries >= 1)
+                                {
+                                    if (opaquedFunc.TypeArgs.Count == 0)
+                                    {
+                                        var fuelAttributeExprList = new List<Expression>();
+                                        fuelAttributeExprList.Add(new NameSegment(opaquedFunc.tok, opaquedFunc.Name, null));
+                                        fuelAttributeExprList.Add(Expression.CreateIntLiteral(Token.NoToken, 1));
+                                        fuelAttributeExprList.Add(Expression.CreateIntLiteral(Token.NoToken, 2));
+                                        unresolvedFailedLemma.Attributes = new Attributes("fuel", fuelAttributeExprList, unresolvedFailedLemma.Attributes);
+                                        string lemmaString;
+                                        using (var wr = new System.IO.StringWriter())
+                                        {
+                                            var pr = new Printer(wr);
+                                            pr.PrintMethod(unresolvedFailedLemma, 0, false);
+                                            lemmaString = wr.ToString();
+                                        }
+                                        Change change = new Change(unresolvedFailedLemma.tok, unresolvedFailedLemma.BodyEndTok, lemmaString, unresolvedFailedLemma.WhatKind);
+                                        unresolvedFailedLemma.Attributes = unresolvedFailedLemma.Attributes.Prev;
+                                        DafnyVerifierClient.AddFileToChangeList(ref changeList, change);
+                                    }
+                                    else
+                                    {
+                                        var newLemmaBodyStr = $"{{reveal_{opaquedFunc.Name}();\n{Printer.StatementToString(unresolvedFailedLemma.Body)}\n}}";
+                                        Change change = new Change(unresolvedFailedLemma.Body.Tok, unresolvedFailedLemma.BodyEndTok, newLemmaBodyStr, "");
+                                        DafnyVerifierClient.AddFileToChangeList(ref changeList, change);
+                                    }
                                 } else {
                                     var changingStmt = CodeModifier.GetStatement(unresolvedFailedLemma.Body, failedProof.Line, failedProof.Column);
                                     var newStmtStr = $"{{\nreveal_{opaquedFunc.Name}();\n{Printer.StatementToString(changingStmt)}\n}}";
@@ -355,9 +376,30 @@ namespace Microsoft.Dafny {
                                 var unresolvedFailedMethod = HoleEvaluator.GetMemberFromUnresolved(unresolvedProgram, resolvedFailedFunc.FullDafnyName) as Method;
                                 Contract.Assert(unresolvedFailedMethod != null);
                                 if (failedProof.Line < unresolvedFailedMethod.Body.Tok.line || retries >= 1) {
-                                    var newMethodBodyStr = $"{{reveal_{opaquedFunc.Name}();\n{Printer.StatementToString(unresolvedFailedMethod.Body)}\n}}";
-                                    Change change = new Change(unresolvedFailedMethod.Body.Tok, unresolvedFailedMethod.Body.EndTok, newMethodBodyStr, "");
-                                    DafnyVerifierClient.AddFileToChangeList(ref changeList, change);
+                                    if (opaquedFunc.TypeArgs.Count == 0)
+                                    {
+                                        var fuelAttributeExprList = new List<Expression>();
+                                        fuelAttributeExprList.Add(new NameSegment(opaquedFunc.tok, opaquedFunc.Name, null));
+                                        fuelAttributeExprList.Add(Expression.CreateIntLiteral(Token.NoToken, 1));
+                                        fuelAttributeExprList.Add(Expression.CreateIntLiteral(Token.NoToken, 2));
+                                        unresolvedFailedMethod.Attributes = new Attributes("fuel", fuelAttributeExprList, unresolvedFailedMethod.Attributes);
+                                        string methodString;
+                                        using (var wr = new System.IO.StringWriter())
+                                        {
+                                            var pr = new Printer(wr);
+                                            pr.PrintMethod(unresolvedFailedMethod, 0, false);
+                                            methodString = wr.ToString();
+                                        }
+                                        Change change = new Change(unresolvedFailedMethod.tok, unresolvedFailedMethod.BodyEndTok, methodString, unresolvedFailedMethod.WhatKind);
+                                        unresolvedFailedMethod.Attributes = unresolvedFailedMethod.Attributes.Prev;
+                                        DafnyVerifierClient.AddFileToChangeList(ref changeList, change);
+                                    }
+                                    else
+                                    {
+                                        var newMethodBodyStr = $"{{reveal_{opaquedFunc.Name}();\n{Printer.StatementToString(unresolvedFailedMethod.Body)}\n}}";
+                                        Change change = new Change(unresolvedFailedMethod.Body.Tok, unresolvedFailedMethod.Body.EndTok, newMethodBodyStr, "");
+                                        DafnyVerifierClient.AddFileToChangeList(ref changeList, change);
+                                    }
                                 } else {
                                     var changingStmt = CodeModifier.GetStatement(unresolvedFailedMethod.Body, failedProof.Line, failedProof.Column);
                                     var newStmtStr = $"{{\nreveal_{opaquedFunc.Name}();\n{Printer.StatementToString(changingStmt)}\n}}";

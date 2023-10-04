@@ -39,10 +39,12 @@ message CloneAndVerifyRequest {
 message TwoStageRequest {
   // Path to the base folder that needs to be cloned
   string directoryPath = 1;
+  // Should run this request exclusively on the server
+  bool runExclusive = 2;
   // List of verification requests to be run in the first stage
-  repeated VerificationRequest firstStageRequestsList = 2;
+  repeated VerificationRequest firstStageRequestsList = 3;
   // List of verification requests to be run in the second stage
-  repeated VerificationRequest secondStageRequestsList = 3;
+  repeated VerificationRequest secondStageRequestsList = 4;
 }
 
 message TmpFolder {

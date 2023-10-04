@@ -360,6 +360,8 @@ namespace Microsoft.Dafny {
         return expr.tok;
       } else if (expr is ParensExpression) {
         return expr.tok;
+      } else if (expr is SeqSelectExpr) {
+        return GetFirstToken((expr as SeqSelectExpr).Seq);
       } else {
         Console.WriteLine($"do not support GetFirstToken for {Printer.ExprToString(expr)} of type {expr.GetType()}");
         return null;
@@ -399,6 +401,9 @@ namespace Microsoft.Dafny {
         return GetLastToken((expr as LetExpr).Body);
       } else if (expr is ParensExpression) {
         return (expr as ParensExpression).CloseParenthesisTok;
+      } else if (expr is SeqSelectExpr) {
+        Console.WriteLine($"cannot support GetLastToken for {Printer.ExprToString(expr)} of type {expr.GetType()}");
+        return null;
       } else {
         Console.WriteLine($"do not support GetLastToken for {Printer.ExprToString(expr)} of type {expr.GetType()}");
         return null;
