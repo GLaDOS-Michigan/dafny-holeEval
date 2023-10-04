@@ -74,10 +74,26 @@ namespace Microsoft.Dafny {
         changeList[change.FileName] = new List<Change>();
       }
       for (int i = 0; i < changeList[change.FileName].Count; i++) {
-        if (changeList[change.FileName][i].StartTok.line <= change.StartTok.line && 
-            change.EndTok.line <= changeList[change.FileName][i].EndTok.line) {
+        // complete override. remove previous one
+        if (change.StartTok.line <= changeList[change.FileName][i].StartTok.line && 
+            changeList[change.FileName][i].EndTok.line <= change.EndTok.line) {
+              changeList[change.FileName].RemoveAt(i);
+              i--;
+              continue;
+        }
+        if (change.StartTok.line == changeList[change.FileName][i].StartTok.line && 
+            changeList[change.FileName][i].EndTok.line == change.EndTok.line && 
+            change.StartTok.col <= changeList[change.FileName][i].StartTok.col && 
+            changeList[change.FileName][i].EndTok.col <= change.EndTok.col) {
+              changeList[change.FileName].RemoveAt(i);
+              i--;
+              continue;
+        }
+        // a larger one already exists. ignore new one
+        if (changeList[change.FileName][i].StartTok.line < change.StartTok.line && 
+            change.EndTok.line < changeList[change.FileName][i].EndTok.line) {
               return false;
-            }
+        }
       }
       int index;
       for (index = 0; index < changeList[change.FileName].Count; index++) {

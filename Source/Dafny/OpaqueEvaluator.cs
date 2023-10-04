@@ -242,9 +242,8 @@ namespace Microsoft.Dafny {
             int newEndEnvId = endEnvId;
             int retries = 0;
             HashSet<int> correctEnvironments = new HashSet<int>();
-            while (retries < 2)
+            while (retries < 4)
             {
-                retries++;
                 for (int i = startEnvId; i <= endEnvId; i++)
                 {
                     var res = GetFailingProofs(i);
@@ -345,8 +344,8 @@ namespace Microsoft.Dafny {
                                     {
                                         var fuelAttributeExprList = new List<Expression>();
                                         fuelAttributeExprList.Add(new NameSegment(opaquedFunc.tok, opaquedFunc.Name, null));
-                                        fuelAttributeExprList.Add(Expression.CreateIntLiteral(Token.NoToken, 1));
-                                        fuelAttributeExprList.Add(Expression.CreateIntLiteral(Token.NoToken, 2));
+                                        fuelAttributeExprList.Add(Expression.CreateIntLiteral(Token.NoToken, retries));
+                                        fuelAttributeExprList.Add(Expression.CreateIntLiteral(Token.NoToken, retries + 1));
                                         unresolvedFailedLemma.Attributes = new Attributes("fuel", fuelAttributeExprList, unresolvedFailedLemma.Attributes);
                                         string lemmaString;
                                         using (var wr = new System.IO.StringWriter())
@@ -380,8 +379,8 @@ namespace Microsoft.Dafny {
                                     {
                                         var fuelAttributeExprList = new List<Expression>();
                                         fuelAttributeExprList.Add(new NameSegment(opaquedFunc.tok, opaquedFunc.Name, null));
-                                        fuelAttributeExprList.Add(Expression.CreateIntLiteral(Token.NoToken, 1));
-                                        fuelAttributeExprList.Add(Expression.CreateIntLiteral(Token.NoToken, 2));
+                                        fuelAttributeExprList.Add(Expression.CreateIntLiteral(Token.NoToken, retries));
+                                        fuelAttributeExprList.Add(Expression.CreateIntLiteral(Token.NoToken, retries + 1));
                                         unresolvedFailedMethod.Attributes = new Attributes("fuel", fuelAttributeExprList, unresolvedFailedMethod.Attributes);
                                         string methodString;
                                         using (var wr = new System.IO.StringWriter())
@@ -444,6 +443,7 @@ namespace Microsoft.Dafny {
                 }
                 endEnvId = newEndEnvId;
                 await dafnyVerifier.RunVerificationRequestsStartingFromEnvironment(startEnvId, false);
+                retries++;
             }
             for (int i = 0; i <= endEnvId; i++)
             {
