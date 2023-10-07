@@ -1011,6 +1011,37 @@ namespace Microsoft.Dafny {
       return new Tuple<List<string>, string>(paramNames, parameterNameTypes);
     }
 
+    public static MemberDecl GetMember(Program program, IncludeParser includeParser, string filename, int line) {
+      foreach (var kvp in program.ModuleSigs) {
+        foreach (var topLevelDecl in ModuleDefinition.AllFunctions(kvp.Value.ModuleDef.TopLevelDecls)) {
+          if (includeParser.Normalized(topLevelDecl.tok.filename) == filename) { 
+            if (topLevelDecl.tok.line <= line && line <= DafnyVerifierClient.GetLastToken(topLevelDecl).line) {
+              return topLevelDecl as MemberDecl;
+            }
+          }
+        }
+        foreach (var topLevelDecl in ModuleDefinition.AllLemmas(kvp.Value.ModuleDef.TopLevelDecls)) {
+          if (topLevelDecl.Body == null) continue;
+          if (includeParser.Normalized(topLevelDecl.tok.filename) == filename) { 
+            if (topLevelDecl.tok.line <= line && line <= DafnyVerifierClient.GetLastToken(topLevelDecl).line) {
+              return topLevelDecl as MemberDecl;
+            }
+          }
+        }
+        foreach (var icallable in ModuleDefinition.AllCallables(kvp.Value.ModuleDef.TopLevelDecls)) {
+          if (icallable is MemberDecl) {
+            var topLevelDecl = icallable as MemberDecl;
+            if (includeParser.Normalized(topLevelDecl.tok.filename) == filename) { 
+              if (topLevelDecl.tok.line <= line && line <= DafnyVerifierClient.GetLastToken(topLevelDecl).line) {
+                return topLevelDecl as MemberDecl;
+              }
+            }
+          }
+        }
+      }
+      return null;
+    }
+
     public static MemberDecl GetMember(Program program, string memberName, bool sanitizedName = false) {
       foreach (var kvp in program.ModuleSigs) {
         foreach (var topLevelDecl in ModuleDefinition.AllFunctions(kvp.Value.ModuleDef.TopLevelDecls)) {

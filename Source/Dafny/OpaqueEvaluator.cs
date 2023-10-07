@@ -267,8 +267,15 @@ namespace Microsoft.Dafny {
                         bool hasCheckedImport = false;
                         foreach (var failedProof in failedProofList)
                         {
-                            var sanitizedFuncName = failedProof.FuncBoogieName.Substring(failedProof.FuncBoogieName.IndexOf("$$") + 2);
-                            var resolvedFailedFunc = HoleEvaluator.GetMember(program, sanitizedFuncName, true);
+                            MemberDecl resolvedFailedFunc;
+                            if (failedProof.FuncBoogieName != null) {
+                                var sanitizedFuncName = failedProof.FuncBoogieName.Substring(failedProof.FuncBoogieName.IndexOf("$$") + 2);
+                                resolvedFailedFunc = HoleEvaluator.GetMember(program, sanitizedFuncName, true);
+                            }
+                            else {
+                                resolvedFailedFunc = HoleEvaluator.GetMember(program, includeParser, includeParser.Normalized(failedProof.Filename, false), failedProof.Line);
+                                failedProof.FuncBoogieName = $"Impl$${resolvedFailedFunc.FullSanitizedName}";
+                            }
                             Contract.Assert(resolvedFailedFunc != null);
                             if (failedProof.Line < resolvedFailedFunc.BodyStartTok.line ||
                                 (failedProof.Line == resolvedFailedFunc.BodyStartTok.line 

@@ -253,11 +253,20 @@ namespace Microsoft.Dafny {
       {
           return ifStmt;
       }
-      else if (ifStmt.Thn.Tok.line <= lineNo && lineNo <= ifStmt.Thn.EndTok.line) {
+      else if ((ifStmt.Thn.Tok.line < lineNo && lineNo < ifStmt.Thn.EndTok.line) ||
+               (ifStmt.Thn.Tok.line == lineNo && lineNo < ifStmt.Thn.EndTok.line && ifStmt.Thn.Tok.col <= col) ||
+               (ifStmt.Thn.Tok.line < lineNo && lineNo == ifStmt.Thn.EndTok.line && col <= ifStmt.Thn.EndTok.col)) {
         return GetStatementFromBlockStmt(ifStmt.Thn, lineNo, col);
       }
       else if (ifStmt.Els != null) {
-        return GetStatement(ifStmt.Els, lineNo, col);
+        if ((ifStmt.Els.Tok.line < lineNo && lineNo < ifStmt.Els.EndTok.line) ||
+            (ifStmt.Els.Tok.line == lineNo && lineNo < ifStmt.Els.EndTok.line && ifStmt.Els.Tok.col <= col) ||
+            (ifStmt.Els.Tok.line < lineNo && lineNo == ifStmt.Els.EndTok.line && col <= ifStmt.Els.EndTok.col)) {
+          return GetStatement(ifStmt.Els, lineNo, col);
+        }
+        else {
+          return ifStmt;
+        }
       }
       return ifStmt;
     }

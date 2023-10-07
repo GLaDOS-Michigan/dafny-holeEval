@@ -385,6 +385,28 @@ namespace Microsoft.Dafny {
       }
     }
 
+    public static IToken GetLastToken(MemberDecl decl) {
+      if (decl is Function) {
+        return GetLastToken(decl as Function);
+      } else if (decl is Method) {
+        return GetLastToken(decl as Method);
+      }
+      else {
+        Console.WriteLine($"GetLastToken not supported for {decl.GetType()}");
+        throw new NotSupportedException($"GetLastToken not supported for {decl.GetType()}");
+      }
+    }
+
+    public static IToken GetLastToken(Function func) {
+      var body = func.Body;
+      return GetLastToken(body);
+    }
+
+    public static IToken GetLastToken(Method method) {
+      var body = method.Body;
+      return body.EndTok;
+    }
+
     public static IToken GetLastToken(Expression expr) {
       if (expr is ApplySuffix) {
         return (expr as ApplySuffix).CloseParanthesisToken;
@@ -395,8 +417,13 @@ namespace Microsoft.Dafny {
       } else if (expr is ITEExpr) {
         return GetLastToken((expr as ITEExpr).Els);
       } else if (expr is MatchExpr) {
-        // cannot find the last bracelet. not included in the AST
-        return null;
+        // FIXME:: assuming '}' does not exist, and last token is in the last case
+        var matchExpr = expr as MatchExpr;
+        return GetLastToken(matchExpr.Cases[matchExpr.Cases.Count - 1].Body);
+      } else if (expr is NestedMatchExpr) {
+        // FIXME:: assuming '}' does not exist, and last token is in the last case
+        var nestedMatchExpr = expr as NestedMatchExpr;
+        return GetLastToken(nestedMatchExpr.Cases[nestedMatchExpr.Cases.Count - 1].Body);
       } else if (expr is IdentifierExpr) {
         return expr.tok;
       } else if (expr is UnaryExpr) {
@@ -428,11 +455,13 @@ namespace Microsoft.Dafny {
 
     public class ProofFailResult {
       public string FuncBoogieName;
+      public string Filename;
       public int Line;
       public int Column;
 
-      public ProofFailResult(string funcBoogieName, int line, int column) {
+      public ProofFailResult(string funcBoogieName, string filename, int line, int column) {
         this.FuncBoogieName = funcBoogieName;
+        this.Filename = filename;
         this.Line = line;
         this.Column = column;
       }
@@ -440,14 +469,38 @@ namespace Microsoft.Dafny {
 
     public static List<ProofFailResult> GetFailingFunctionResults(string filename, string output) {
       List<ProofFailResult> res = new List<ProofFailResult>();
+      var outputList = output.Split("\nVerifying ").ToList();
       if (!output.EndsWith(" 0 errors\n")) {
-        var outputList = output.Split("\nVerifying ").ToList();
         if (outputList[outputList.Count - 1].LastIndexOf("\nDafny program verifier") != -1) {
-          // Console.WriteLine($"do not support parsing: {outputList[outputList.Count - 1]}");
-          // Console.WriteLine("will skip this function");
-          // return null;
           outputList.Add(outputList[outputList.Count - 1].Substring(outputList[outputList.Count - 1].LastIndexOf("\nDafny program verifier")));
           outputList[outputList.Count - 2] = outputList[outputList.Count - 2].Substring(0, outputList[outputList.Count - 2].LastIndexOf("\nDafny program verifier"));
+        }
+        else {
+            if (outputList.Count == 1) {
+            // possible parse error
+            var outputPerLine = output.Split("\n").ToList();
+            outputPerLine.RemoveAt(outputPerLine.Count - 1);
+            outputPerLine.RemoveAt(0);
+            if (outputPerLine[outputPerLine.Count - 1].IndexOf("resolution/type") != -1) {
+              outputPerLine.RemoveAt(outputPerLine.Count - 1);
+              foreach (var lineStr in outputPerLine) {
+                if (lineStr.IndexOf("Error: the included file") != -1) {
+                  continue;
+                }
+                if (lineStr.IndexOf("Error: not resolving module") != -1) {
+                  continue;
+                }
+                var errorFilename = lineStr.Substring(0, lineStr.IndexOf("("));
+                var errorFilenameSplited = errorFilename.Split('/').ToList();
+                errorFilenameSplited.RemoveRange(0, 4);
+                var normalizedErrorFilename = String.Join('/', errorFilenameSplited);
+                var lineColStrList = lineStr.Substring(lineStr.IndexOf("(") + 1, lineStr.IndexOf("):") - lineStr.IndexOf("(") - 1).Split(',');
+                var line = Int32.Parse(lineColStrList[0]);
+                var col = Int32.Parse(lineColStrList[1]);
+                res.Add(new ProofFailResult(null, normalizedErrorFilename, line, col));
+              }
+            }
+          }
         }
         for (int i = 1; i < outputList.Count; i++) {
           if (outputList[i].EndsWith("verified\n")) {
@@ -465,7 +518,10 @@ namespace Microsoft.Dafny {
                 var lineColStrList = error.Substring(1, error.IndexOf(')') - 1).Split(',');
                 var line = Int32.Parse(lineColStrList[0]);
                 var col = Int32.Parse(lineColStrList[1]);
-                res.Add(new ProofFailResult(funcBoogieName, line, col));
+                var filenameSplited = filename.Split('/').ToList();
+                filenameSplited.RemoveRange(0, 4);
+                var normalizedFilename = String.Join('/', filenameSplited);
+                res.Add(new ProofFailResult(funcBoogieName, normalizedFilename, line, col));
               }
             }
           }
