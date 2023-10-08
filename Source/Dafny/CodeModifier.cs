@@ -287,6 +287,9 @@ namespace Microsoft.Dafny {
       //   return null;
       // }
       if (stmt is BlockStmt) {
+        if ((stmt as BlockStmt).Body.Count == 0) {
+          return stmt;
+        }
         if (lineNo < (stmt as BlockStmt).Body[0].Tok.line) {
           return stmt;
         }
