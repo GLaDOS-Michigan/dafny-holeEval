@@ -906,13 +906,13 @@ namespace Microsoft.Dafny {
       }
 
       if (singletons != null) {
-        Expression display = new SetDisplayExpr(singletons[0].tok, true, singletons);
+        Expression display = new SetDisplayExpr(singletons[0].tok, true, singletons, singletons[0].tok);
         display.Type = new SetType(true, builtIns.ObjectQ()); // resolve here
         sets.Add(display);
       }
 
       if (sets.Count == 0) {
-        Expression emptyset = new SetDisplayExpr(Token.NoToken, true, new List<Expression>());
+        Expression emptyset = new SetDisplayExpr(Token.NoToken, true, new List<Expression>(), Token.NoToken);
         emptyset.Type = new SetType(true, builtIns.ObjectQ()); // resolve here
         return emptyset;
       } else {
@@ -10535,14 +10535,14 @@ namespace Microsoft.Dafny {
       foreach (var p in iter.OutsHistoryFields) {
         // ensures this.ys == [];
         ens.Add(new AttributedExpression(new BinaryExpr(p.tok, BinaryExpr.Opcode.Eq,
-          new MemberSelectExpr(p.tok, new ThisExpr(p.tok), p.Name), new SeqDisplayExpr(p.tok, new List<Expression>()))));
+          new MemberSelectExpr(p.tok, new ThisExpr(p.tok), p.Name), new SeqDisplayExpr(p.tok, new List<Expression>(), p.tok))));
       }
       // ensures this.Valid();
       var valid_call = new FunctionCallExpr(iter.tok, "Valid", new ThisExpr(iter.tok), iter.tok, new List<ActualBinding>());
       ens.Add(new AttributedExpression(valid_call));
       // ensures this._reads == old(ReadsClause);
       var modSetSingletons = new List<Expression>();
-      Expression frameSet = new SetDisplayExpr(iter.tok, true, modSetSingletons);
+      Expression frameSet = new SetDisplayExpr(iter.tok, true, modSetSingletons, iter.tok);
       foreach (var fr in iter.Reads.Expressions) {
         if (fr.FieldName != null) {
           reporter.Error(MessageSource.Resolver, fr.tok, "sorry, a reads clause for an iterator is not allowed to designate specific fields");
@@ -10557,7 +10557,7 @@ namespace Microsoft.Dafny {
         new OldExpr(iter.tok, frameSet))));
       // ensures this._modifies == old(ModifiesClause);
       modSetSingletons = new List<Expression>();
-      frameSet = new SetDisplayExpr(iter.tok, true, modSetSingletons);
+      frameSet = new SetDisplayExpr(iter.tok, true, modSetSingletons, iter.tok);
       foreach (var fr in iter.Modifies.Expressions) {
         if (fr.FieldName != null) {
           reporter.Error(MessageSource.Resolver, fr.tok, "sorry, a modifies clause for an iterator is not allowed to designate specific fields");
@@ -10573,7 +10573,7 @@ namespace Microsoft.Dafny {
       // ensures this._new == {};
       ens.Add(new AttributedExpression(new BinaryExpr(iter.tok, BinaryExpr.Opcode.Eq,
         new MemberSelectExpr(iter.tok, new ThisExpr(iter.tok), "_new"),
-        new SetDisplayExpr(iter.tok, true, new List<Expression>()))));
+        new SetDisplayExpr(iter.tok, true, new List<Expression>(), iter.tok))));
       // ensures this._decreases0 == old(DecreasesClause[0]) && ...;
       Contract.Assert(iter.Decreases.Expressions.Count == iter.DecreasesFields.Count);
       for (int i = 0; i < iter.Decreases.Expressions.Count; i++) {
@@ -10624,7 +10624,7 @@ namespace Microsoft.Dafny {
         var ite = new ITEExpr(iter.tok, false, new IdentifierExpr(iter.tok, "more"),
           new BinaryExpr(iter.tok, BinaryExpr.Opcode.Add,
             new OldExpr(iter.tok, new MemberSelectExpr(iter.tok, new ThisExpr(iter.tok), ys.Name)),
-            new SeqDisplayExpr(iter.tok, new List<Expression>() { new MemberSelectExpr(iter.tok, new ThisExpr(iter.tok), y.Name) })),
+            new SeqDisplayExpr(iter.tok, new List<Expression>() { new MemberSelectExpr(iter.tok, new ThisExpr(iter.tok), y.Name) }, iter.tok)),
           new OldExpr(iter.tok, new MemberSelectExpr(iter.tok, new ThisExpr(iter.tok), ys.Name)));
         var eq = new BinaryExpr(iter.tok, BinaryExpr.Opcode.Eq, new MemberSelectExpr(iter.tok, new ThisExpr(iter.tok), ys.Name), ite);
         ens.Add(new AttributedExpression(eq));
@@ -12846,15 +12846,15 @@ namespace Microsoft.Dafny {
                 break;
             }
             if (bin.E0.Type.AsSetType != null) {
-              neutralValue = new SetDisplayExpr(bin.tok, bin.E0.Type.AsSetType.Finite, new List<Expression>()) {
+              neutralValue = new SetDisplayExpr(bin.tok, bin.E0.Type.AsSetType.Finite, new List<Expression>(), bin.tok) {
                 Type = bin.E0.Type.NormalizeExpand()
               };
             } else if (bin.E0.Type.AsMultiSetType != null) {
-              neutralValue = new MultiSetDisplayExpr(bin.tok, new List<Expression>()) {
+              neutralValue = new MultiSetDisplayExpr(bin.tok, new List<Expression>(), bin.tok) {
                 Type = bin.E0.Type.NormalizeExpand()
               };
             } else if (bin.E0.Type.AsSeqType != null) {
-              neutralValue = new SeqDisplayExpr(bin.tok, new List<Expression>()) {
+              neutralValue = new SeqDisplayExpr(bin.tok, new List<Expression>(), bin.tok) {
                 Type = bin.E0.Type.NormalizeExpand()
               };
             } else if (bin.E0.Type.IsNumericBased(Type.NumericPersuasion.Real)) {
@@ -13196,7 +13196,7 @@ namespace Microsoft.Dafny {
           }
           Expression id = makeTemp("recv", s, codeContext, lseq.Seq);
           Expression id0 = id0 = makeTemp("idx", s, codeContext, lseq.E0);
-          lhsExtract = new SeqSelectExpr(lseq.tok, lseq.SelectOne, id, id0, null);
+          lhsExtract = new SeqSelectExpr(lseq.tok, lseq.SelectOne, id, id0, null, lseq.LastToken);
           lhsExtract.Type = lseq.Type;
         } else if (lhsResolved is MultiSelectExpr lmulti) {
           Expression id = makeTemp("recv", s, codeContext, lmulti.Array);
@@ -15590,7 +15590,7 @@ namespace Microsoft.Dafny {
             ctor_args.Add(new ExprDotName(tok, d, f.Name, null));
           }
         }
-        var ctor_call = new DatatypeValue(tok, crc.EnclosingDatatype.Name, crc.Name, ctor_args.ConvertAll(e => new ActualBinding(null, e)));
+        var ctor_call = new DatatypeValue(tok, crc.EnclosingDatatype.Name, crc.Name, ctor_args.ConvertAll(e => new ActualBinding(null, e)), tok);
         ResolveDatatypeValue(opts, ctor_call, dt, root.Type.NormalizeExpand());  // resolve to root.Type, so that type parameters get filled in appropriately
         if (body == null) {
           body = ctor_call;
@@ -16079,7 +16079,7 @@ namespace Microsoft.Dafny {
             return true;
           }
         }
-        var rr = new DatatypeValue(expr.tok, pair.Item1.EnclosingDatatype.Name, name, args ?? new List<ActualBinding>());
+        var rr = new DatatypeValue(expr.tok, pair.Item1.EnclosingDatatype.Name, name, args ?? new List<ActualBinding>(), expr.tok);
         bool ok = ResolveDatatypeValue(opts, rr, pair.Item1.EnclosingDatatype, null, complain);
         if (!ok) {
           expr.ResolvedExpression = null;
@@ -16287,7 +16287,7 @@ namespace Microsoft.Dafny {
             if (expr.OptTypeArguments != null) {
               reporter.Error(MessageSource.Resolver, expr.tok, "datatype constructor does not take any type parameters ('{0}')", name);
             }
-            var rr = new DatatypeValue(expr.tok, pair.Item1.EnclosingDatatype.Name, name, args ?? new List<ActualBinding>());
+            var rr = new DatatypeValue(expr.tok, pair.Item1.EnclosingDatatype.Name, name, args ?? new List<ActualBinding>(), expr.tok);
             ResolveDatatypeValue(opts, rr, pair.Item1.EnclosingDatatype, null);
 
             if (args == null) {
@@ -16344,7 +16344,7 @@ namespace Microsoft.Dafny {
             if (expr.OptTypeArguments != null) {
               reporter.Error(MessageSource.Resolver, expr.tok, "datatype constructor does not take any type parameters ('{0}')", name);
             }
-            var rr = new DatatypeValue(expr.tok, ctor.EnclosingDatatype.Name, name, args ?? new List<ActualBinding>());
+            var rr = new DatatypeValue(expr.tok, ctor.EnclosingDatatype.Name, name, args ?? new List<ActualBinding>(), expr.tok);
             ResolveDatatypeValue(opts, rr, ctor.EnclosingDatatype, ty);
             if (args == null) {
               r = rr;

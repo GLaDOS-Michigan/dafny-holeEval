@@ -2174,13 +2174,13 @@ namespace Microsoft.Dafny {
               unit = new LiteralExpr(f.tok, n);
               unit.Type = f.ResultType;
             } else if (f.ResultType.AsSetType != null) {
-              unit = new SetDisplayExpr(f.tok, !f.ResultType.IsISetType, new List<Expression>());
+              unit = new SetDisplayExpr(f.tok, !f.ResultType.IsISetType, new List<Expression>(), f.tok);
               unit.Type = f.ResultType;
             } else if (f.ResultType.AsMultiSetType != null) {
-              unit = new MultiSetDisplayExpr(f.tok, new List<Expression>());
+              unit = new MultiSetDisplayExpr(f.tok, new List<Expression>(), f.tok);
               unit.Type = f.ResultType;
             } else if (f.ResultType.AsSeqType != null) {
-              unit = new SeqDisplayExpr(f.tok, new List<Expression>());
+              unit = new SeqDisplayExpr(f.tok, new List<Expression>(), f.tok);
               unit.Type = f.ResultType;
             } else {
               Contract.Assert(false);  // unexpected type

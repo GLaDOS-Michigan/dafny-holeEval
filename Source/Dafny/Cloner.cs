@@ -311,17 +311,17 @@ namespace Microsoft.Dafny {
 
       } else if (expr is DatatypeValue) {
         var e = (DatatypeValue)expr;
-        return new DatatypeValue(Tok(e.tok), e.DatatypeName, e.MemberName, e.Bindings.ArgumentBindings.ConvertAll(CloneActualBinding));
+        return new DatatypeValue(Tok(e.tok), e.DatatypeName, e.MemberName, e.Bindings.ArgumentBindings.ConvertAll(CloneActualBinding), Tok(e.LastToken));
 
       } else if (expr is DisplayExpression) {
         DisplayExpression e = (DisplayExpression)expr;
-        if (expr is SetDisplayExpr) {
-          return new SetDisplayExpr(Tok(e.tok), ((SetDisplayExpr)expr).Finite, e.Elements.ConvertAll(CloneExpr));
-        } else if (expr is MultiSetDisplayExpr) {
-          return new MultiSetDisplayExpr(Tok(e.tok), e.Elements.ConvertAll(CloneExpr));
+        if (expr is SetDisplayExpr setDisplayExpr) {
+          return new SetDisplayExpr(Tok(e.tok), ((SetDisplayExpr)expr).Finite, e.Elements.ConvertAll(CloneExpr), Tok(setDisplayExpr.LastToken));
+        } else if (expr is MultiSetDisplayExpr multiSetDisplayExpr) {
+          return new MultiSetDisplayExpr(Tok(e.tok), e.Elements.ConvertAll(CloneExpr), multiSetDisplayExpr.LastToken);
         } else {
           Contract.Assert(expr is SeqDisplayExpr);
-          return new SeqDisplayExpr(Tok(e.tok), e.Elements.ConvertAll(CloneExpr));
+          return new SeqDisplayExpr(Tok(e.tok), e.Elements.ConvertAll(CloneExpr), Tok((expr as SeqDisplayExpr).LastToken));
         }
 
       } else if (expr is MapDisplayExpr) {
@@ -330,7 +330,7 @@ namespace Microsoft.Dafny {
         foreach (ExpressionPair p in e.Elements) {
           pp.Add(new ExpressionPair(CloneExpr(p.A), CloneExpr(p.B)));
         }
-        return new MapDisplayExpr(Tok(expr.tok), e.Finite, pp);
+        return new MapDisplayExpr(Tok(expr.tok), e.Finite, pp, e.LastToken);
 
       } else if (expr is NameSegment) {
         return CloneNameSegment(expr);
@@ -346,7 +346,7 @@ namespace Microsoft.Dafny {
 
       } else if (expr is SeqSelectExpr) {
         var e = (SeqSelectExpr)expr;
-        return new SeqSelectExpr(Tok(e.tok), e.SelectOne, CloneExpr(e.Seq), CloneExpr(e.E0), CloneExpr(e.E1));
+        return new SeqSelectExpr(Tok(e.tok), e.SelectOne, CloneExpr(e.Seq), CloneExpr(e.E0), CloneExpr(e.E1), Tok(e.LastToken));
 
       } else if (expr is MultiSelectExpr) {
         var e = (MultiSelectExpr)expr;
@@ -354,11 +354,11 @@ namespace Microsoft.Dafny {
 
       } else if (expr is SeqUpdateExpr) {
         var e = (SeqUpdateExpr)expr;
-        return new SeqUpdateExpr(Tok(e.tok), CloneExpr(e.Seq), CloneExpr(e.Index), CloneExpr(e.Value));
+        return new SeqUpdateExpr(Tok(e.tok), CloneExpr(e.Seq), CloneExpr(e.Index), CloneExpr(e.Value), Tok(e.LastToken));
 
       } else if (expr is DatatypeUpdateExpr) {
         var e = (DatatypeUpdateExpr)expr;
-        return new DatatypeUpdateExpr(Tok(e.tok), CloneExpr(e.Root), e.Updates.ConvertAll(t => Tuple.Create(Tok(t.Item1), t.Item2, CloneExpr(t.Item3))));
+        return new DatatypeUpdateExpr(Tok(e.tok), CloneExpr(e.Root), e.Updates.ConvertAll(t => Tuple.Create(Tok(t.Item1), t.Item2, CloneExpr(t.Item3))), Tok(e.LastToken));
 
       } else if (expr is FunctionCallExpr) {
         var e = (FunctionCallExpr)expr;
@@ -375,7 +375,7 @@ namespace Microsoft.Dafny {
 
       } else if (expr is MultiSetFormingExpr) {
         var e = (MultiSetFormingExpr)expr;
-        return new MultiSetFormingExpr(Tok(e.tok), CloneExpr(e.E));
+        return new MultiSetFormingExpr(Tok(e.tok), CloneExpr(e.E), e.LastToken);
 
       } else if (expr is OldExpr) {
         var e = (OldExpr)expr;

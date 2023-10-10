@@ -189,7 +189,7 @@ namespace Microsoft.Dafny {
           var dafnyY = new MemberSelectExpr(s.Tok, th, y);
           var ys = iter.OutsHistoryFields[i];
           var dafnyYs = new MemberSelectExpr(s.Tok, th, ys);
-          var dafnySingletonY = new SeqDisplayExpr(s.Tok, new List<Expression>() { dafnyY });
+          var dafnySingletonY = new SeqDisplayExpr(s.Tok, new List<Expression>() { dafnyY }, s.Tok);
           dafnySingletonY.Type = ys.Type;  // resolve here
           var rhs = new BinaryExpr(s.Tok, BinaryExpr.Opcode.Add, dafnyYs, dafnySingletonY);
           rhs.ResolvedOp = BinaryExpr.ResolvedOpcode.Concat;

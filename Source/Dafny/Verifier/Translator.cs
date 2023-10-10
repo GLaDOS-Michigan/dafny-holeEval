@@ -1719,7 +1719,7 @@ namespace Microsoft.Dafny {
         var thisYs = new MemberSelectExpr(iter.tok, th, ys);
         var oldThisYs = new OldExpr(iter.tok, thisYs);
         oldThisYs.Type = thisYs.Type;  // resolve here
-        var singleton = new SeqDisplayExpr(iter.tok, new List<Expression>() { thisY });
+        var singleton = new SeqDisplayExpr(iter.tok, new List<Expression>() { thisY }, iter.tok);
         singleton.Type = thisYs.Type;  // resolve here
         var concat = new BinaryExpr(iter.tok, BinaryExpr.Opcode.Add, oldThisYs, singleton);
         concat.ResolvedOp = BinaryExpr.ResolvedOpcode.Concat; concat.Type = oldThisYs.Type;  // resolve here
@@ -1885,7 +1885,7 @@ namespace Microsoft.Dafny {
           rArgs.Add(ie);
         }
         // create and resolve datatype value
-        var r = new DatatypeValue(mc.tok, mc.Ctor.EnclosingDatatype.Name, mc.Ctor.Name, rArgs);
+        var r = new DatatypeValue(mc.tok, mc.Ctor.EnclosingDatatype.Name, mc.Ctor.Name, rArgs, mc.tok);
         r.Ctor = mc.Ctor;
         r.Type = new UserDefinedType(mc.tok, mc.Ctor.EnclosingDatatype.Name, new List<Type>()/*this is not right, but it seems like it won't matter here*/);
 
@@ -8553,7 +8553,7 @@ namespace Microsoft.Dafny {
         }
         foreach (var ctor in dt.Ctors) {
           if (ctor.Formals.Count == 0) {
-            var v = new DatatypeValue(x.tok, dt.Name, ctor.Name, new List<Expression>());
+            var v = new DatatypeValue(x.tok, dt.Name, ctor.Name, new List<Expression>(), x.tok);
             v.Ctor = ctor;  // resolve here
             v.InferredTypeArgs = xType.TypeArgs; // resolved here.
             v.Type = xType;  // resolve here
@@ -8561,15 +8561,15 @@ namespace Microsoft.Dafny {
           }
         }
       } else if (xType is SetType) {
-        var empty = new SetDisplayExpr(x.tok, ((SetType)xType).Finite, new List<Expression>());
+        var empty = new SetDisplayExpr(x.tok, ((SetType)xType).Finite, new List<Expression>(), x.tok);
         empty.Type = xType;
         yield return empty;
       } else if (xType is MultiSetType) {
-        var empty = new MultiSetDisplayExpr(x.tok, new List<Expression>());
+        var empty = new MultiSetDisplayExpr(x.tok, new List<Expression>(), x.tok);
         empty.Type = xType;
         yield return empty;
       } else if (xType is SeqType) {
-        var empty = new SeqDisplayExpr(x.tok, new List<Expression>());
+        var empty = new SeqDisplayExpr(x.tok, new List<Expression>(), x.tok);
         empty.Type = xType;
         yield return empty;
       } else if (xType.IsNumericBased(Type.NumericPersuasion.Int)) {
@@ -8669,19 +8669,19 @@ namespace Microsoft.Dafny {
       } else if (typ.IsDatatype) {
         return null;  // this can be improved
       } else if (typ is SetType) {
-        var empty = new SetDisplayExpr(tok, ((SetType)typ).Finite, new List<Expression>());
+        var empty = new SetDisplayExpr(tok, ((SetType)typ).Finite, new List<Expression>(), tok);
         empty.Type = typ;
         return empty;
       } else if (typ is MultiSetType) {
-        var empty = new MultiSetDisplayExpr(tok, new List<Expression>());
+        var empty = new MultiSetDisplayExpr(tok, new List<Expression>(), tok);
         empty.Type = typ;
         return empty;
       } else if (typ is SeqType) {
-        var empty = new SeqDisplayExpr(tok, new List<Expression>());
+        var empty = new SeqDisplayExpr(tok, new List<Expression>(), tok);
         empty.Type = typ;
         return empty;
       } else if (typ is MapType) {
-        var empty = new MapDisplayExpr(tok, ((MapType)typ).Finite, new List<ExpressionPair>());
+        var empty = new MapDisplayExpr(tok, ((MapType)typ).Finite, new List<ExpressionPair>(), tok);
         empty.Type = typ;
         return empty;
       } else if (typ is ArrowType) {

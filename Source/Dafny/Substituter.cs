@@ -60,12 +60,12 @@ namespace Microsoft.Dafny {
         DisplayExpression e = (DisplayExpression)expr;
         List<Expression> newElements = SubstituteExprList(e.Elements);
         if (newElements != e.Elements) {
-          if (expr is SetDisplayExpr) {
-            newExpr = new SetDisplayExpr(expr.tok, ((SetDisplayExpr)expr).Finite, newElements);
-          } else if (expr is MultiSetDisplayExpr) {
-            newExpr = new MultiSetDisplayExpr(expr.tok, newElements);
+          if (expr is SetDisplayExpr setDisplayExpr) {
+            newExpr = new SetDisplayExpr(expr.tok, ((SetDisplayExpr)expr).Finite, newElements, setDisplayExpr.LastToken);
+          } else if (expr is MultiSetDisplayExpr multiSetDisplayExpr) {
+            newExpr = new MultiSetDisplayExpr(expr.tok, newElements, multiSetDisplayExpr.LastToken);
           } else {
-            newExpr = new SeqDisplayExpr(expr.tok, newElements);
+            newExpr = new SeqDisplayExpr(expr.tok, newElements, (expr as SeqDisplayExpr).LastToken);
           }
         }
       } else if (expr is MapDisplayExpr) {
@@ -81,7 +81,7 @@ namespace Microsoft.Dafny {
           }
         }
         if (anyChanges) {
-          newExpr = new MapDisplayExpr(expr.tok, e.Finite, elmts);
+          newExpr = new MapDisplayExpr(expr.tok, e.Finite, elmts, e.LastToken);
         }
       } else if (expr is MemberSelectExpr) {
         MemberSelectExpr fse = (MemberSelectExpr)expr;
@@ -98,7 +98,7 @@ namespace Microsoft.Dafny {
         Expression e0 = sse.E0 == null ? null : Substitute(sse.E0);
         Expression e1 = sse.E1 == null ? null : Substitute(sse.E1);
         if (seq != sse.Seq || e0 != sse.E0 || e1 != sse.E1) {
-          newExpr = new SeqSelectExpr(sse.tok, sse.SelectOne, seq, e0, e1);
+          newExpr = new SeqSelectExpr(sse.tok, sse.SelectOne, seq, e0, e1, sse.LastToken);
         }
 
       } else if (expr is SeqUpdateExpr) {
@@ -110,7 +110,7 @@ namespace Microsoft.Dafny {
           Expression index = Substitute(sse.Index);
           Expression val = Substitute(sse.Value);
           if (seq != sse.Seq || index != sse.Index || val != sse.Value) {
-            newExpr = new SeqUpdateExpr(sse.tok, seq, index, val);
+            newExpr = new SeqUpdateExpr(sse.tok, seq, index, val, sse.LastToken);
           }
         }
 
@@ -151,7 +151,7 @@ namespace Microsoft.Dafny {
         DatatypeValue dtv = (DatatypeValue)expr;
         var newArguments = SubstituteExprList(dtv.Bindings.Arguments); // substitute into the expressions, but drop any binding names (since those are no longer needed)
         if (newArguments != dtv.Bindings.Arguments) {
-          DatatypeValue newDtv = new DatatypeValue(dtv.tok, dtv.DatatypeName, dtv.MemberName, newArguments);
+          DatatypeValue newDtv = new DatatypeValue(dtv.tok, dtv.DatatypeName, dtv.MemberName, newArguments, dtv.LastToken);
           newDtv.Ctor = dtv.Ctor;  // resolve on the fly (and set newDtv.Type below, at end)
           newDtv.InferredTypeArgs = Util.Map(dtv.InferredTypeArgs, tt => Resolver.SubstType(tt, typeMap));
           // ^ Set the correct type arguments to the constructor
@@ -193,7 +193,7 @@ namespace Microsoft.Dafny {
         var e = (MultiSetFormingExpr)expr;
         var se = Substitute(e.E);
         if (se != e.E) {
-          newExpr = new MultiSetFormingExpr(expr.tok, se);
+          newExpr = new MultiSetFormingExpr(expr.tok, se, e.LastToken);
         }
       } else if (expr is BoxingCastExpr) {
         var e = (BoxingCastExpr)expr;

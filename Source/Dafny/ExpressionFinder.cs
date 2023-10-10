@@ -234,7 +234,7 @@ namespace Microsoft.Dafny {
                   continue;
                 }
               // for (int j = 0; j < intVarList.Count; j++) {
-                var seqSelectExpr = new SeqSelectExpr(seqVar.expr.tok, true, seqVar.expr, intVar.expr, null);
+                var seqSelectExpr = new SeqSelectExpr(seqVar.expr.tok, true, seqVar.expr, intVar.expr, null, seqVar.expr.tok);
                 seqSelectExpr.Type = (seqVar.expr.Type as SeqType).Arg;
                 yield return new ExpressionDepth(seqSelectExpr, Math.Max(seqVar.depth, intVar.depth) + 1);
               }
@@ -769,7 +769,7 @@ namespace Microsoft.Dafny {
             {
               // create 0th element of a sequence
               var zeroLiteralExpr = Expression.CreateIntLiteral(expr.tok, 0);
-              var zerothElement = new SeqSelectExpr(expr.tok, true, expr, zeroLiteralExpr, null);
+              var zerothElement = new SeqSelectExpr(expr.tok, true, expr, zeroLiteralExpr, null, expr.tok);
               var st = t as SeqType;
               zerothElement.Type = st.Arg;
               foreach (var e in TraverseFormal(program, new ExpressionDepth(zerothElement, exprDepth.depth + 1))) {
@@ -780,7 +780,7 @@ namespace Microsoft.Dafny {
             {
               // create last element of a sequence
               var lastElementExpr = Expression.CreateDecrement(cardinalityExpr, 1);
-              var lastElement = new SeqSelectExpr(expr.tok, true, expr, lastElementExpr, null);
+              var lastElement = new SeqSelectExpr(expr.tok, true, expr, lastElementExpr, null, expr.tok);
               lastElement.Type = (t as SeqType).Arg;
               foreach (var e in TraverseFormal(program, new ExpressionDepth(lastElement, exprDepth.depth + 1))) {
                 yield return e;
@@ -792,7 +792,7 @@ namespace Microsoft.Dafny {
               {
                 // create DropFirst of a sequence
                 var oneLiteralExpr = Expression.CreateIntLiteral(expr.tok, 1);
-                var dropFirstElement = new SeqSelectExpr(expr.tok, false, expr, oneLiteralExpr, null);
+                var dropFirstElement = new SeqSelectExpr(expr.tok, false, expr, oneLiteralExpr, null, expr.tok);
                 dropFirstElement.Type = t;
                 yield return new ExpressionDepth(dropFirstElement, exprDepth.depth + 1);
               }
@@ -800,7 +800,7 @@ namespace Microsoft.Dafny {
               {
                 // create drop last element of a sequence
                 var cardinalityMinusOneExpr = Expression.CreateDecrement(expr, 1);
-                var dropLastElement = new SeqSelectExpr(expr.tok, false, expr, null, cardinalityMinusOneExpr);
+                var dropLastElement = new SeqSelectExpr(expr.tok, false, expr, null, cardinalityMinusOneExpr, expr.tok);
                 dropLastElement.Type = t;
                 yield return new ExpressionDepth(dropLastElement, exprDepth.depth + 1);
               }

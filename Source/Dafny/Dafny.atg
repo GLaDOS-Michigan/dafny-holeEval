@@ -3899,7 +3899,7 @@ ParensExpression<out Expression e>
        var argumentGhostness = ghostness.ToList();
        // make sure the corresponding tuple type exists
        var tmp = theBuiltIns.TupleType(x, args.Count, true, argumentGhostness);
-       e = new DatatypeValue(x, BuiltIns.TupleTypeName(argumentGhostness), BuiltIns.TupleTypeCtorName(args.Count), args);
+       e = new DatatypeValue(x, BuiltIns.TupleTypeName(argumentGhostness), BuiltIns.TupleTypeCtorName(args.Count), args, closeParen);
      }
   .)
   .
@@ -3909,6 +3909,7 @@ SetDisplayExpr<out Expression e>
 = (. Contract.Ensures(Contract.ValueAtReturn(out e) != null);
      IToken token = null;
      IToken x = null;
+     IToken lastToken = null;
      e = dummyExpr;
   .)
   [ ( "iset" | "multiset" )                  (. token = t; .)
@@ -3917,22 +3918,23 @@ SetDisplayExpr<out Expression e>
                                                 x = token;
                                                 List<Expression> elements = new List<Expression/*!*/>();
                                              .)
-    [ Expressions<elements> ]                (. if (token.kind == _iset) {
-                                                  e = new SetDisplayExpr(x, false, elements);
+    [ Expressions<elements> ]                (. lastToken = la;
+                                                if (token.kind == _iset) {
+                                                  e = new SetDisplayExpr(x, false, elements, lastToken);
                                                 } else if (token.kind == _multiset) {
-                                                  e = new MultiSetDisplayExpr(x, elements);
+                                                  e = new MultiSetDisplayExpr(x, elements, lastToken);
                                                 } else {
-                                                  e = new SetDisplayExpr(x, true, elements);
+                                                  e = new SetDisplayExpr(x, true, elements, lastToken);
                                                 }
                                              .)
     "}"
   |
     "("                                       (. x = t; .)
-     Expression<out e, true, true>            (.
+     Expression<out e, true, true>            (.  lastToken = la;
                                                   if (token == null || token.kind != _multiset) {
                                                     SemErr(x, "A forming expression must be a multiset");
                                                   }
-                                                  e = new MultiSetFormingExpr(x, e);
+                                                  e = new MultiSetFormingExpr(x, e, lastToken);
                                                .)
     ")"
   )
@@ -3966,7 +3968,7 @@ SeqDisplayExpr<out Expression e>
                                                 x = t;
 
                                              .)
-    [ Expressions<elements> ]                (. e = new SeqDisplayExpr(x, elements);
+    [ Expressions<elements> ]                (. e = new SeqDisplayExpr(x, elements, la);
                                              .)
     "]"
   )
@@ -3977,10 +3979,14 @@ MapDisplayExpr<out Expression e>
 = (. Contract.Ensures(Contract.ValueAtReturn(out e) != null);
      List<ExpressionPair/*!*/>/*!*/ elements= new List<ExpressionPair/*!*/>() ;
      e = dummyExpr;
+     IToken lastToken = null;
   .)
   ( "map" | "imap" ) (. IToken mapToken = t; .)
   "["
-    [ MapLiteralExpressions<out elements> ]  (. e = new MapDisplayExpr(mapToken, mapToken.kind == _map, elements);.)
+    [ MapLiteralExpressions<out elements> ]  (. 
+      lastToken = la;
+      e = new MapDisplayExpr(mapToken, mapToken.kind == _map, elements, lastToken);
+    .)
   "]"
   .
 
@@ -4346,7 +4352,7 @@ AtCall<.out IToken atLabel, out IToken openParen, out IToken closeParen, out Lis
 /*------------------------------------------------------------------------*/
 Suffix<ref Expression e>
 = (. Contract.Requires(e != null); Contract.Ensures(e!=null);
-     IToken id, x;
+     IToken id, x, lastTok;
      Expression e0 = null;  Expression e1 = null;  Expression ee;  bool anyDots = false;
      List<Expression> multipleLengths = null; bool takeRest = false; // takeRest is relevant only if multipleLengths is non-null
      List<Expression> multipleIndices = null;
@@ -4359,7 +4365,7 @@ Suffix<ref Expression e>
         { "," MemberBindingUpdate<out id, out v>      (. updates.Add(Tuple.Create(id, id.val, v)); .)
         }
       ")"
-      (. e = new DatatypeUpdateExpr(x, e, updates); .)
+      (. IToken lastToken = t; e = new DatatypeUpdateExpr(x, e, updates, lastToken); .)
     | DotSuffix<out id, out x>                 (. if (x != null) {
                                                     // process id as a Suffix in its own right
                                                     e = new ExprDotName(id, e, id.val, null);
@@ -4416,6 +4422,7 @@ Suffix<ref Expression e>
         [ Expression<out ee, true, true>       (. e1 = ee; .)
         ]
       )
+    "]" (. lastTok = t; .)
       (. if (multipleIndices != null) {
            e = new MultiSelectExpr(x, e, multipleIndices);
            // make sure an array class with this dimensionality exists
@@ -4428,29 +4435,28 @@ Suffix<ref Expression e>
            Contract.Assert(anyDots || e0 != null);
            if (anyDots) {
              //Contract.Assert(e0 != null || e1 != null);
-             e = new SeqSelectExpr(x, false, e, e0, e1);
+             e = new SeqSelectExpr(x, false, e, e0, e1, lastTok);
            } else if (multipleLengths != null) {
              Expression prev = null;
              List<Expression> seqs = new List<Expression>();
               foreach (var len in multipleLengths) {
                 var end = prev == null ? len : new BinaryExpr(x, BinaryExpr.Opcode.Add, prev, len);
-                seqs.Add(new SeqSelectExpr(x, false, e, prev, end));
+                seqs.Add(new SeqSelectExpr(x, false, e, prev, end, x));
                 prev = end;
               }
              if (takeRest) {
-               seqs.Add(new SeqSelectExpr(x, false, e, prev, null));
+               seqs.Add(new SeqSelectExpr(x, false, e, prev, null, x));
              }
-             e = new SeqDisplayExpr(x, seqs);
+             e = new SeqDisplayExpr(x, seqs, lastTok);
            } else if (e1 == null) {
              Contract.Assert(e0 != null);
-             e = new SeqSelectExpr(x, true, e, e0, null);
+             e = new SeqSelectExpr(x, true, e, e0, null, lastTok);
            } else {
              Contract.Assert(e0 != null);
-             e = new SeqUpdateExpr(x, e, e0, e1);
+             e = new SeqUpdateExpr(x, e, e0, e1, lastTok);
            }
          }
       .)
-    "]"
   | "("                                    (. IToken openParen = t; var args = new List<ActualBinding>(); .)
     [ ActualBindings<args> ]
     ")"                                    (. IToken closeParen = t; e = new ApplySuffix(openParen, null, e, args, closeParen); .)

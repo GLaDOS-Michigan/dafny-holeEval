@@ -94,6 +94,16 @@ namespace Microsoft.Dafny {
             change.EndTok.line < changeList[change.FileName][i].EndTok.line) {
               return false;
         }
+        if (changeList[change.FileName][i].StartTok.line < change.StartTok.line && 
+            change.EndTok.line == changeList[change.FileName][i].EndTok.line &&
+            change.EndTok.col <= changeList[change.FileName][i].EndTok.line) {
+              return false;
+        }
+        if (changeList[change.FileName][i].StartTok.line == change.StartTok.line && 
+            changeList[change.FileName][i].StartTok.col <= change.StartTok.col && 
+            change.EndTok.line < changeList[change.FileName][i].EndTok.line) {
+              return false;
+        }
       }
       int index;
       for (index = 0; index < changeList[change.FileName].Count; index++) {
@@ -218,6 +228,10 @@ namespace Microsoft.Dafny {
               startTokCol = code[startTokLine].Length;
             }
             Contract.Assert(startTokLine >= 0);
+          }
+          if (startTokCol >= code[startTokLine].Length) {
+            Console.WriteLine($"incorrect change in environment #{EnvironmentSetupTasks.Count - 1}");
+            Console.WriteLine($"{change.ToJsonString()}");
           }
           code[startTokLine] = code[startTokLine].Substring(0, startTokCol) + change.Replacement.Replace("\n", " ");
           for (int i = startTokLine + 1; i < endTokLine; i++) {
@@ -376,11 +390,16 @@ namespace Microsoft.Dafny {
         return expr.tok;
       } else if (expr is ParensExpression) {
         return expr.tok;
-      } else if (expr is SeqSelectExpr) {
-        return GetFirstToken((expr as SeqSelectExpr).Seq);
+      } else if (expr is SeqSelectExpr || expr is SeqUpdateExpr || expr is SetDisplayExpr ||
+                 expr is MultiSetDisplayExpr || expr is MapDisplayExpr || expr is SeqDisplayExpr) {
+        return expr.tok;
+      } else if (expr is NegationExpression) {
+        return expr.tok;
+      } else if (expr is DatatypeValue) {
+        return expr.tok;
       } else {
-        Console.WriteLine($"do not support GetFirstToken for {Printer.ExprToString(expr)} of type {expr.GetType()}");
-        return null;
+        Console.WriteLine($"do not support GetFirstToken for {Printer.ExprToString(expr)} of type {expr.GetType()} returning expr.tok");
+        return expr.tok;
         // throw new NotImplementedException($"do not support GetFirstToken for {Printer.ExprToString(expr)} of type {expr.GetType()}");
       }
     }
@@ -408,45 +427,56 @@ namespace Microsoft.Dafny {
     }
 
     public static IToken GetLastToken(Expression expr) {
-      if (expr is ApplySuffix) {
-        return (expr as ApplySuffix).CloseParanthesisToken;
-      } else if (expr is ComprehensionExpr) {
-        return (expr as ComprehensionExpr).BodyEndTok;
-      } else if (expr is StmtExpr) {
-        return GetLastToken((expr as StmtExpr).E);
-      } else if (expr is ITEExpr) {
-        return GetLastToken((expr as ITEExpr).Els);
-      } else if (expr is MatchExpr) {
+      if (expr is ApplySuffix applySuffix) {
+        return applySuffix.CloseParanthesisToken;
+      } else if (expr is ComprehensionExpr compExpr) {
+        return compExpr.BodyEndTok;
+      } else if (expr is StmtExpr stmtExpr) {
+        return GetLastToken(stmtExpr.E);
+      } else if (expr is ITEExpr iteExpr) {
+        return GetLastToken(iteExpr.Els);
+      } else if (expr is MatchExpr matchExpr) {
         // FIXME:: assuming '}' does not exist, and last token is in the last case
-        var matchExpr = expr as MatchExpr;
         return GetLastToken(matchExpr.Cases[matchExpr.Cases.Count - 1].Body);
-      } else if (expr is NestedMatchExpr) {
+      } else if (expr is NestedMatchExpr nestedMatchExpr) {
         // FIXME:: assuming '}' does not exist, and last token is in the last case
-        var nestedMatchExpr = expr as NestedMatchExpr;
         return GetLastToken(nestedMatchExpr.Cases[nestedMatchExpr.Cases.Count - 1].Body);
       } else if (expr is IdentifierExpr) {
         return expr.tok;
-      } else if (expr is UnaryExpr) {
-        // cannot find the last bracelet. not included in the AST
-        return null;
-      } else if (expr is BinaryExpr) {
-        return GetLastToken((expr as BinaryExpr).E1);
+      } else if (expr is UnaryExpr unaryExpr) {
+        return GetLastToken(unaryExpr.E);
+      } else if (expr is BinaryExpr binaryExpr) {
+        return GetLastToken(binaryExpr.E1);
       } else if (expr is LiteralExpr) {
         return expr.tok;
-      } else if (expr is ChainingExpression) {
-        var chainExpr = expr as ChainingExpression;
+      } else if (expr is ChainingExpression chainExpr) {
         return GetLastToken(chainExpr.Operands[chainExpr.Operands.Count - 1]);
       } else if (expr is NameSegment) {
         return expr.tok;
       } else if (expr is ExprDotName) {
         return expr.tok;
-      } else if (expr is LetExpr) {
-        return GetLastToken((expr as LetExpr).Body);
-      } else if (expr is ParensExpression) {
-        return (expr as ParensExpression).CloseParenthesisTok;
-      } else if (expr is SeqSelectExpr) {
-        Console.WriteLine($"cannot support GetLastToken for {Printer.ExprToString(expr)} of type {expr.GetType()}");
-        return null;
+      } else if (expr is LetExpr letExpr) {
+        return GetLastToken(letExpr.Body);
+      } else if (expr is ParensExpression parensExpr) {
+        return parensExpr.CloseParenthesisTok;
+      } else if (expr is SeqSelectExpr seqSelectExpr) {
+        return seqSelectExpr.LastToken;
+      } else if (expr is SeqUpdateExpr seqUpdateExpr) {
+        return seqUpdateExpr.LastToken;
+      } else if (expr is SetDisplayExpr setDisplayExpr) {
+        return setDisplayExpr.LastToken;
+      } else if (expr is MultiSetDisplayExpr multiSetDisplayExpr) {
+        return multiSetDisplayExpr.LastToken;
+      } else if (expr is MapDisplayExpr mapDisplayExpr) {
+        return mapDisplayExpr.LastToken;
+      } else if (expr is SeqDisplayExpr seqDisplayExpr) {
+        return seqDisplayExpr.LastToken;
+      } else if (expr is NegationExpression negExpr) {
+        return GetLastToken(negExpr.E);
+      } else if (expr is DatatypeUpdateExpr datatypeUpdateExpr) {
+        return datatypeUpdateExpr.LastToken;
+      } else if (expr is DatatypeValue datatypeValue) {
+        return datatypeValue.LastToken;
       } else {
         Console.WriteLine($"do not support GetLastToken for {Printer.ExprToString(expr)} of type {expr.GetType()}");
         return null;

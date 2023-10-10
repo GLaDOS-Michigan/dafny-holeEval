@@ -147,10 +147,10 @@ namespace Microsoft.Dafny {
                     Contract.Assert(ll.SelectOne);
                     if (!FreeVariablesUtil.ContainsFreeVariable(ll.Seq, false, i)) {
                       Fi = ll.E0;
-                      lhsBuilder = e => { var l = new SeqSelectExpr(ll.tok, true, ll.Seq, e, null); l.Type = ll.Type; return l; };
+                      lhsBuilder = e => { var l = new SeqSelectExpr(ll.tok, true, ll.Seq, e, null, ll.LastToken); l.Type = ll.Type; return l; };
                     } else if (!FreeVariablesUtil.ContainsFreeVariable(ll.E0, false, i)) {
                       Fi = ll.Seq;
-                      lhsBuilder = e => { var l = new SeqSelectExpr(ll.tok, true, e, ll.E0, null); l.Type = ll.Type; return l; };
+                      lhsBuilder = e => { var l = new SeqSelectExpr(ll.tok, true, e, ll.E0, null, ll.LastToken); l.Type = ll.Type; return l; };
                     }
                   }
                 }
@@ -674,7 +674,7 @@ namespace Microsoft.Dafny {
             var n = sbs.Body.Count;
             if (ctor.RefinementBase == null) {
               // Repr := {this};
-              var e = new SetDisplayExpr(tok, true, new List<Expression>() { self });
+              var e = new SetDisplayExpr(tok, true, new List<Expression>() { self }, tok);
               e.Type = new SetType(true, builtIns.ObjectQ());
               Statement s = new AssignStmt(tok, tok, Repr, new ExprRhs(e));
               s.IsGhost = true;
@@ -746,7 +746,7 @@ namespace Microsoft.Dafny {
 
       foreach (var ff in subobjects) {
         var F = new MemberSelectExpr(tok, implicitSelf, ff.Item1);  // create a resolved MemberSelectExpr
-        Expression e = new SetDisplayExpr(tok, true, new List<Expression>() { F }) {
+        Expression e = new SetDisplayExpr(tok, true, new List<Expression>() { F }, tok) {
           Type = new SetType(true, builtIns.ObjectQ())  // resolve here
         };
         var rhs = new BinaryExpr(tok, BinaryExpr.Opcode.Add, Repr, e) {

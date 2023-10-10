@@ -294,7 +294,7 @@ namespace Microsoft.Dafny {
       Expression body = new ApplyExpr(tok, fn, args);
       body.Type = member.ResultType;  // resolve here
       if (!total) {
-        Expression emptySet = new SetDisplayExpr(tok, true, new List<Expression>());
+        Expression emptySet = new SetDisplayExpr(tok, true, new List<Expression>(), tok);
         emptySet.Type = member.ResultType;  // resolve here
         body = Expression.CreateEq(body, emptySet, member.ResultType);
       }
@@ -9885,6 +9885,7 @@ namespace Microsoft.Dafny {
     public DatatypeCtor Ctor;  // filled in by resolution
     public List<Type> InferredTypeArgs = new List<Type>();  // filled in by resolution
     public bool IsCoCall;  // filled in by resolution
+    public IToken LastToken;
     [ContractInvariantMethod]
     void ObjectInvariant() {
       Contract.Invariant(DatatypeName != null);
@@ -9894,7 +9895,7 @@ namespace Microsoft.Dafny {
       Contract.Invariant(Ctor == null || InferredTypeArgs.Count == Ctor.EnclosingDatatype.TypeArgs.Count);
     }
 
-    public DatatypeValue(IToken tok, string datatypeName, string memberName, [Captured] List<ActualBinding> arguments)
+    public DatatypeValue(IToken tok, string datatypeName, string memberName, [Captured] List<ActualBinding> arguments, IToken lastToken)
       : base(tok) {
       Contract.Requires(cce.NonNullElements(arguments));
       Contract.Requires(tok != null);
@@ -9903,14 +9904,15 @@ namespace Microsoft.Dafny {
       this.DatatypeName = datatypeName;
       this.MemberName = memberName;
       this.Bindings = new ActualBindings(arguments);
+      this.LastToken = lastToken;
     }
 
     /// <summary>
     /// This constructor is intended to be used when constructing a resolved DatatypeValue. The "args" are expected
     /// to be already resolved, and are all given positionally.
     /// </summary>
-    public DatatypeValue(IToken tok, string datatypeName, string memberName, List<Expression> arguments)
-      : this(tok, datatypeName, memberName, arguments.ConvertAll(e => new ActualBinding(null, e))) {
+    public DatatypeValue(IToken tok, string datatypeName, string memberName, List<Expression> arguments, IToken lastToken)
+      : this(tok, datatypeName, memberName, arguments.ConvertAll(e => new ActualBinding(null, e)), lastToken) {
       Bindings.AcceptArgumentExpressionsAsExactParameterList();
     }
 
@@ -10097,30 +10099,36 @@ namespace Microsoft.Dafny {
 
   public class SetDisplayExpr : DisplayExpression {
     public bool Finite;
-    public SetDisplayExpr(IToken tok, bool finite, List<Expression> elements)
+    public IToken LastToken;
+    public SetDisplayExpr(IToken tok, bool finite, List<Expression> elements, IToken lastToken)
       : base(tok, elements) {
       Contract.Requires(tok != null);
       Contract.Requires(cce.NonNullElements(elements));
       Finite = finite;
+      LastToken = lastToken;
     }
   }
 
   public class MultiSetDisplayExpr : DisplayExpression {
-    public MultiSetDisplayExpr(IToken tok, List<Expression> elements) : base(tok, elements) {
+    public IToken LastToken;
+    public MultiSetDisplayExpr(IToken tok, List<Expression> elements, IToken lastToken) : base(tok, elements) {
       Contract.Requires(tok != null);
       Contract.Requires(cce.NonNullElements(elements));
+      LastToken = lastToken;
     }
   }
 
   public class MapDisplayExpr : Expression {
     public bool Finite;
+    public IToken LastToken;
     public List<ExpressionPair> Elements;
-    public MapDisplayExpr(IToken tok, bool finite, List<ExpressionPair> elements)
+    public MapDisplayExpr(IToken tok, bool finite, List<ExpressionPair> elements, IToken lastToken)
       : base(tok) {
       Contract.Requires(tok != null);
       Contract.Requires(cce.NonNullElements(elements));
       Finite = finite;
       Elements = elements;
+      LastToken = lastToken;
     }
     public override IEnumerable<Expression> SubExpressions {
       get {
@@ -10132,10 +10140,12 @@ namespace Microsoft.Dafny {
     }
   }
   public class SeqDisplayExpr : DisplayExpression {
-    public SeqDisplayExpr(IToken tok, List<Expression> elements)
+    public IToken LastToken;
+    public SeqDisplayExpr(IToken tok, List<Expression> elements, IToken lastToken)
       : base(tok, elements) {
       Contract.Requires(cce.NonNullElements(elements));
       Contract.Requires(tok != null);
+      LastToken = lastToken;
     }
   }
 
@@ -10365,13 +10375,14 @@ namespace Microsoft.Dafny {
     public readonly Expression Seq;
     public readonly Expression E0;
     public readonly Expression E1;
+    public readonly IToken LastToken;
     [ContractInvariantMethod]
     void ObjectInvariant() {
       Contract.Invariant(Seq != null);
       Contract.Invariant(!SelectOne || E1 == null);
     }
 
-    public SeqSelectExpr(IToken tok, bool selectOne, Expression seq, Expression e0, Expression e1)
+    public SeqSelectExpr(IToken tok, bool selectOne, Expression seq, Expression e0, Expression e1, IToken lastToken)
       : base(tok) {
       Contract.Requires(tok != null);
       Contract.Requires(seq != null);
@@ -10381,6 +10392,7 @@ namespace Microsoft.Dafny {
       Seq = seq;
       E0 = e0;
       E1 = e1;
+      LastToken = lastToken;
     }
 
     public override IEnumerable<Expression> SubExpressions {
@@ -10440,6 +10452,7 @@ namespace Microsoft.Dafny {
     public readonly Expression Seq;
     public readonly Expression Index;
     public readonly Expression Value;
+    public readonly IToken LastToken;
     public Expression ResolvedUpdateExpr;       // filled in during resolution, if the SeqUpdateExpr corresponds to a datatype update
     [ContractInvariantMethod]
     void ObjectInvariant() {
@@ -10448,7 +10461,7 @@ namespace Microsoft.Dafny {
       Contract.Invariant(Value != null);
     }
 
-    public SeqUpdateExpr(IToken tok, Expression seq, Expression index, Expression val)
+    public SeqUpdateExpr(IToken tok, Expression seq, Expression index, Expression val, IToken lastToken)
       : base(tok) {
       Contract.Requires(tok != null);
       Contract.Requires(seq != null);
@@ -10457,6 +10470,7 @@ namespace Microsoft.Dafny {
       Seq = seq;
       Index = index;
       Value = val;
+      LastToken = lastToken;
     }
 
     public override IEnumerable<Expression> SubExpressions {
@@ -10647,18 +10661,20 @@ namespace Microsoft.Dafny {
   public class MultiSetFormingExpr : Expression {
     [Peer]
     public readonly Expression E;
+    public IToken LastToken;
     [ContractInvariantMethod]
     void ObjectInvariant() {
       Contract.Invariant(E != null);
     }
 
     [Captured]
-    public MultiSetFormingExpr(IToken tok, Expression expr)
+    public MultiSetFormingExpr(IToken tok, Expression expr, IToken lastToken)
       : base(tok) {
       Contract.Requires(tok != null);
       Contract.Requires(expr != null);
       cce.Owner.AssignSame(this, expr);
       E = expr;
+      LastToken = lastToken;
     }
 
     public override IEnumerable<Expression> SubExpressions {
@@ -12102,7 +12118,7 @@ namespace Microsoft.Dafny {
         this.Expr = new IdentifierExpr(this.tok, this.Var);
       } else {
         var dtValue = new DatatypeValue(this.tok, this.Ctor.EnclosingDatatype.Name, this.Id,
-          this.Arguments == null ? new List<Expression>() : this.Arguments.ConvertAll(arg => arg.Expr));
+          this.Arguments == null ? new List<Expression>() : this.Arguments.ConvertAll(arg => arg.Expr), this.tok);
         dtValue.Ctor = this.Ctor;  // resolve here
         dtValue.InferredTypeArgs.AddRange(dtvTypeArgs);  // resolve here
         dtValue.Type = new UserDefinedType(this.tok, this.Ctor.EnclosingDatatype.Name, this.Ctor.EnclosingDatatype, dtvTypeArgs);
@@ -12718,7 +12734,8 @@ namespace Microsoft.Dafny {
     public readonly Expression Root;
     public readonly List<Tuple<IToken, string, Expression>> Updates;
     public List<DatatypeCtor> LegalSourceConstructors;  // filled in by resolution
-    public DatatypeUpdateExpr(IToken tok, Expression root, List<Tuple<IToken, string, Expression>> updates)
+    public IToken LastToken;
+    public DatatypeUpdateExpr(IToken tok, Expression root, List<Tuple<IToken, string, Expression>> updates, IToken lastToken)
       : base(tok) {
       Contract.Requires(tok != null);
       Contract.Requires(root != null);
@@ -12726,6 +12743,7 @@ namespace Microsoft.Dafny {
       Contract.Requires(updates.Count != 0);
       Root = root;
       Updates = updates;
+      LastToken = lastToken;
     }
 
     public override IEnumerable<Expression> SubExpressions {
