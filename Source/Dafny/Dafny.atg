@@ -1852,9 +1852,11 @@ ReadsClause<.List<FrameExpression/*!*/>/*!*/ reads,
 InvariantClause<. List<AttributedExpression> invariants.> =
   "invariant"                                   (. Attributes attrs = null;
                                                    Expression e;
+                                                   IToken lastToken = null;
                                                 .)
   { Attribute<ref attrs> }
-  Expression<out e, false, true>                (. invariants.Add(new AttributedExpression(e, attrs)); .)
+  Expression<out e, false, true>                (. if (la.val == ";") lastToken = la; 
+                                                   invariants.Add(new AttributedExpression(e, attrs, lastToken)); .)
   OldSemi
   .
 
