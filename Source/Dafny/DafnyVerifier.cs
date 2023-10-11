@@ -368,9 +368,8 @@ namespace Microsoft.Dafny {
         return (expr as StmtExpr).S.Tok;
       } else if (expr is ITEExpr) {
         return expr.tok;
-      } else if (expr is MatchExpr) {
-        // cannot find the last bracelet. not included in the AST
-        return null;
+      } else if (expr is NestedMatchExpr) {
+        return expr.tok;
       } else if (expr is IdentifierExpr) {
         return expr.tok;
       } else if (expr is UnaryExpr) {

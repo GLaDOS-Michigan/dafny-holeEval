@@ -316,8 +316,7 @@ namespace Microsoft.Dafny {
     }
 
     public static IToken GetStartingToken(Statement stmt) {
-      if (stmt is UpdateStmt) {
-        var updateStmt = stmt as UpdateStmt;
+      if (stmt is UpdateStmt updateStmt) {
         if (updateStmt.Lhss.Count > 0) {
           return GetStartingToken(updateStmt.Lhss[0]);
         }
@@ -329,8 +328,14 @@ namespace Microsoft.Dafny {
             throw new NotSupportedException();
           }
         }
-      }
-      else {
+      } else if (stmt is ConcreteUpdateStatement concreteUpdateStatement) {
+        if (concreteUpdateStatement.Lhss.Count > 0) {
+          return GetStartingToken(concreteUpdateStatement.Lhss[0]);
+        }
+        else {
+          return stmt.Tok;
+        }
+      } else {
         return stmt.Tok;
       }
     }
