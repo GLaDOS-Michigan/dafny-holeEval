@@ -260,7 +260,7 @@ namespace Microsoft.Dafny {
     }
 
     public AttributedExpression CloneAttributedExpr(AttributedExpression expr) {
-      var mfe = new AttributedExpression(CloneExpr(expr.E), expr.Label == null ? null : new AssertLabel(Tok(expr.Label.Tok), expr.Label.Name), CloneAttributes(expr.Attributes));
+      var mfe = new AttributedExpression(CloneExpr(expr.E), expr.Label == null ? null : new AssertLabel(Tok(expr.Label.Tok), expr.Label.Name), CloneAttributes(expr.Attributes), expr.SemicolonToken);
       mfe.Attributes = CloneAttributes(expr.Attributes);
       return mfe;
     }
@@ -379,19 +379,19 @@ namespace Microsoft.Dafny {
 
       } else if (expr is OldExpr) {
         var e = (OldExpr)expr;
-        return new OldExpr(Tok(e.tok), CloneExpr(e.E), e.At);
+        return new OldExpr(Tok(e.tok), CloneExpr(e.E), Tok(e.CloseParenTok), e.At);
 
       } else if (expr is UnchangedExpr) {
         var e = (UnchangedExpr)expr;
-        return new UnchangedExpr(Tok(e.tok), e.Frame.ConvertAll(CloneFrameExpr), e.At);
+        return new UnchangedExpr(Tok(e.tok), e.Frame.ConvertAll(CloneFrameExpr), e.At, Tok(e.LastToken));
 
       } else if (expr is FreshExpr) {
         var e = (FreshExpr)expr;
-        return new FreshExpr(Tok(e.tok), CloneExpr(e.E), e.At);
+        return new FreshExpr(Tok(e.tok), CloneExpr(e.E), Tok(e.LastToken), e.At);
 
       } else if (expr is UnaryOpExpr) {
         var e = (UnaryOpExpr)expr;
-        return new UnaryOpExpr(Tok(e.tok), e.Op, CloneExpr(e.E));
+        return new UnaryOpExpr(Tok(e.tok), e.Op, CloneExpr(e.E), Tok(e.LastToken));
 
       } else if (expr is ConversionExpr) {
         var e = (ConversionExpr)expr;

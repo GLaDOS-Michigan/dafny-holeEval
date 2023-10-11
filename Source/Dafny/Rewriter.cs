@@ -535,7 +535,7 @@ namespace Microsoft.Dafny {
           ctor.Ens.Insert(0, new AttributedExpression(valid));
           // ensures fresh(Repr);
           var freshness = new FreshExpr(tok,
-            new MemberSelectExpr(tok, new ImplicitThisExpr(tok), "Repr"));
+            new MemberSelectExpr(tok, new ImplicitThisExpr(tok), "Repr"), tok);
           ctor.Ens.Insert(1, new AttributedExpression(freshness));
           var m0 = new ThisExpr(tok);
           AddHoverText(member.tok, "modifies {0}\nensures {1} && {2}", m0, valid, freshness);
@@ -692,7 +692,7 @@ namespace Microsoft.Dafny {
               var valid = ValidCall(tok, implicitSelf, Valid, m);
               if (m is TwoStateLemma) {
                 // Instead use:  requires old(Valid())
-                valid = new OldExpr(tok, valid);
+                valid = new OldExpr(tok, valid, tok);
                 valid.Type = Type.Bool;
               }
               m.Req.Insert(0, new AttributedExpression(valid));
@@ -712,12 +712,12 @@ namespace Microsoft.Dafny {
             // ensures Valid()
             m.Ens.Insert(0, new AttributedExpression(valid));
             // ensures fresh(Repr - old(Repr));
-            var e0 = new OldExpr(tok, Repr);
+            var e0 = new OldExpr(tok, Repr, tok);
             e0.Type = Repr.Type;
             var e1 = new BinaryExpr(tok, BinaryExpr.Opcode.Sub, Repr, e0);
             e1.ResolvedOp = BinaryExpr.ResolvedOpcode.SetDifference;
             e1.Type = Repr.Type;
-            var freshness = new FreshExpr(tok, e1);
+            var freshness = new FreshExpr(tok, e1, tok);
             freshness.Type = Type.Bool;
             m.Ens.Insert(1, new AttributedExpression(freshness));
             AddHoverText(m.tok, format + "\nensures {0} && {2}", valid, Repr, freshness);
@@ -1068,7 +1068,7 @@ namespace Microsoft.Dafny {
             // First handle all of the requirements' preconditions
             foreach (AttributedExpression req in fn.Req) {
               foreach (Expression e in generateAutoReqs(req.E)) {
-                auto_reqs.Add(new AttributedExpression(e, req.Attributes));
+                auto_reqs.Add(new AttributedExpression(e, req.Attributes, null));
               }
             }
             fn.Req.InsertRange(0, auto_reqs); // Need to come before the actual requires

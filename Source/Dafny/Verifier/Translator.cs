@@ -1698,11 +1698,11 @@ namespace Microsoft.Dafny {
       // assume the implicit postconditions promised by MoveNext:
       // assume fresh(_new - old(_new));
       var yeEtran = new ExpressionTranslator(this, predef, etran.HeapExpr, new Bpl.IdentifierExpr(iter.tok, "$_OldIterHeap", predef.HeapType));
-      var old_nw = new OldExpr(iter.tok, nw);
+      var old_nw = new OldExpr(iter.tok, nw, iter.tok);
       old_nw.Type = nw.Type;  // resolve here
       var setDiff = new BinaryExpr(iter.tok, BinaryExpr.Opcode.Sub, nw, old_nw);
       setDiff.ResolvedOp = BinaryExpr.ResolvedOpcode.SetDifference; setDiff.Type = nw.Type;  // resolve here
-      Expression cond = new FreshExpr(iter.tok, setDiff);
+      Expression cond = new FreshExpr(iter.tok, setDiff, iter.tok);
       cond.Type = Type.Bool;  // resolve here
       builder.Add(TrAssumeCmd(iter.tok, yeEtran.TrExpr(cond)));
 
@@ -1717,7 +1717,7 @@ namespace Microsoft.Dafny {
         var ys = iter.OutsHistoryFields[i];
         var thisY = new MemberSelectExpr(iter.tok, th, y);
         var thisYs = new MemberSelectExpr(iter.tok, th, ys);
-        var oldThisYs = new OldExpr(iter.tok, thisYs);
+        var oldThisYs = new OldExpr(iter.tok, thisYs, iter.tok);
         oldThisYs.Type = thisYs.Type;  // resolve here
         var singleton = new SeqDisplayExpr(iter.tok, new List<Expression>() { thisY }, iter.tok);
         singleton.Type = thisYs.Type;  // resolve here
@@ -2314,7 +2314,7 @@ namespace Microsoft.Dafny {
         if (lits != null && lits.Exists(p => p is ThisSurrogate)) {
           args.Add(Lit(bvThisIdExpr));
           var th = new ThisExpr(f);
-          var l = new UnaryOpExpr(f.tok, UnaryOpExpr.Opcode.Lit, th) {
+          var l = new UnaryOpExpr(f.tok, UnaryOpExpr.Opcode.Lit, th, f.tok) {
             Type = th.Type
           };
           receiverReplacement = l;
@@ -2346,7 +2346,7 @@ namespace Microsoft.Dafny {
           var ie = new IdentifierExpr(p.tok, p.AssignUniqueName(f.IdGenerator));
           ie.Var = p;
           ie.Type = ie.Var.Type;
-          var l = new UnaryOpExpr(p.tok, UnaryOpExpr.Opcode.Lit, ie);
+          var l = new UnaryOpExpr(p.tok, UnaryOpExpr.Opcode.Lit, ie, p.tok);
           l.Type = ie.Var.Type;
           substMap.Add(p, l);
         } else {
@@ -11010,7 +11010,7 @@ namespace Microsoft.Dafny {
           // split into a number of UnchangeExpr's, one for each FrameExpression
           foreach (var fe in e.Frame) {
             var tok = new NestedToken(e.tok, fe.tok);
-            Expression ee = new UnchangedExpr(tok, new List<FrameExpression> { fe }, e.At) { AtLabel = e.AtLabel };
+            Expression ee = new UnchangedExpr(tok, new List<FrameExpression> { fe }, e.At, e.LastToken) { AtLabel = e.AtLabel };
             ee.Type = Type.Bool;  // resolve here
             TrSplitExpr(ee, splits, position, heightLimit, inlineProtectedFunctions, apply_induction, etran);
           }

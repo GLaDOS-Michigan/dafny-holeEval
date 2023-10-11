@@ -373,7 +373,7 @@ namespace Microsoft.Dafny {
         return null;
       } else if (expr is IdentifierExpr) {
         return expr.tok;
-      } else if (expr is UnaryOpExpr) {
+      } else if (expr is UnaryExpr) {
         return (expr as UnaryExpr).tok;
       } else if (expr is BinaryExpr) {
         return GetFirstToken((expr as BinaryExpr).E0);
@@ -440,6 +440,18 @@ namespace Microsoft.Dafny {
       return body.EndTok;
     }
 
+    public static IToken GetFirstToken(AttributedExpression expr) {
+      return GetFirstToken(expr.E);
+    }
+
+    public static IToken GetLastToken(AttributedExpression expr) {
+      if (expr.SemicolonToken != null) {
+        return expr.SemicolonToken;
+      } else {
+        return GetLastToken(expr.E);
+      }
+    }
+
     public static IToken GetLastToken(Expression expr) {
       if (expr is ApplySuffix applySuffix) {
         return applySuffix.CloseParanthesisToken;
@@ -458,7 +470,11 @@ namespace Microsoft.Dafny {
       } else if (expr is IdentifierExpr) {
         return expr.tok;
       } else if (expr is UnaryExpr unaryExpr) {
-        return GetLastToken(unaryExpr.E);
+        if (unaryExpr is UnaryOpExpr unaryOpExpr) {
+          return unaryOpExpr.LastToken == null ? GetLastToken(unaryExpr.E) : unaryOpExpr.LastToken;
+        } else {
+          return GetLastToken(unaryExpr.E);
+        }
       } else if (expr is BinaryExpr binaryExpr) {
         return GetLastToken(binaryExpr.E1);
       } else if (expr is LiteralExpr) {
@@ -491,6 +507,10 @@ namespace Microsoft.Dafny {
         return datatypeUpdateExpr.LastToken;
       } else if (expr is DatatypeValue datatypeValue) {
         return datatypeValue.LastToken;
+      } else if (expr is OldExpr oldExpr) {
+        return oldExpr.CloseParenTok;
+      } else if (expr is UnchangedExpr unchangedExpr) {
+        return unchangedExpr.LastToken;
       } else {
         Console.WriteLine($"do not support GetLastToken for {Printer.ExprToString(expr)} of type {expr.GetType()}");
         return null;
@@ -525,7 +545,8 @@ namespace Microsoft.Dafny {
             var outputPerLine = output.Split("\n").ToList();
             outputPerLine.RemoveAt(outputPerLine.Count - 1);
             outputPerLine.RemoveAt(0);
-            if (outputPerLine[outputPerLine.Count - 1].IndexOf("resolution/type") != -1) {
+            if (outputPerLine[outputPerLine.Count - 1].IndexOf("resolution/type") != -1 ||
+                outputPerLine[outputPerLine.Count - 1].IndexOf("parse errors detected in ") != -1) {
               outputPerLine.RemoveAt(outputPerLine.Count - 1);
               foreach (var lineStr in outputPerLine) {
                 if (lineStr.IndexOf("Error: the included file") != -1) {

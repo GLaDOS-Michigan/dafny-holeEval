@@ -166,7 +166,7 @@ namespace Microsoft.Dafny {
         // BoogieWrapper before calling Substitute.
         Expression se = Substitute(e.E);
         if (se != e.E) {
-          newExpr = new OldExpr(expr.tok, se, e.At) { AtLabel = e.AtLabel };
+          newExpr = new OldExpr(expr.tok, se, e.CloseParenTok, e.At) { AtLabel = e.AtLabel };
         }
       } else if (expr is UnchangedExpr) {
         var e = (UnchangedExpr)expr;
@@ -180,7 +180,7 @@ namespace Microsoft.Dafny {
           fr.Add(fefe);
         }
         if (anythingChanged) {
-          newExpr = new UnchangedExpr(e.tok, fr, e.At) { AtLabel = e.AtLabel };
+          newExpr = new UnchangedExpr(e.tok, fr, e.At, e.LastToken) { AtLabel = e.AtLabel };
         }
       } else if (expr is SeqConstructionExpr) {
         var e = (SeqConstructionExpr)expr;
@@ -207,10 +207,10 @@ namespace Microsoft.Dafny {
         if (se != e.E) {
           if (e is FreshExpr) {
             var ee = (FreshExpr)e;
-            newExpr = new FreshExpr(expr.tok, se, ee.At) { AtLabel = ee.AtLabel };
+            newExpr = new FreshExpr(expr.tok, se, ee.LastToken, ee.At) { AtLabel = ee.AtLabel };
           } else if (e is UnaryOpExpr) {
             var ee = (UnaryOpExpr)e;
-            newExpr = new UnaryOpExpr(expr.tok, ee.Op, se);
+            newExpr = new UnaryOpExpr(expr.tok, ee.Op, se, ee.LastToken);
           } else if (e is ConversionExpr) {
             var ee = (ConversionExpr)e;
             newExpr = new ConversionExpr(expr.tok, se, ee.ToType);

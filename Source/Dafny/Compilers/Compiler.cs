@@ -2776,7 +2776,7 @@ namespace Microsoft.Dafny {
         // to make it more target-language idiomatic and improve performance
         ConcreteSyntaxTree guardWriter;
         ConcreteSyntaxTree bodyWriter = EmitIf(out guardWriter, false, wr);
-        var negated = new UnaryOpExpr(s.Tok, UnaryOpExpr.Opcode.Not, s.Expr);
+        var negated = new UnaryOpExpr(s.Tok, UnaryOpExpr.Opcode.Not, s.Expr, s.Tok);
         negated.Type = Type.Bool;
         TrExpr(negated, guardWriter, false);
         EmitHalt(s.Tok, s.Message, bodyWriter);

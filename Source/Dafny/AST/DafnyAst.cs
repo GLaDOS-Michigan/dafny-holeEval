@@ -9252,7 +9252,7 @@ namespace Microsoft.Dafny {
       Contract.Requires(e.Type != null);
       Contract.Requires(e.Type.AsSetType != null || e.Type.AsMultiSetType != null || e.Type.AsSeqType != null);
       Contract.Ensures(Contract.Result<Expression>() != null);
-      var s = new UnaryOpExpr(e.tok, UnaryOpExpr.Opcode.Cardinality, e) {
+      var s = new UnaryOpExpr(e.tok, UnaryOpExpr.Opcode.Cardinality, e, e.tok) {
         Type = builtIns.Nat()
       };
       s.HasCardinality = true;
@@ -9437,7 +9437,7 @@ namespace Microsoft.Dafny {
         }
       }
 
-      return new UnaryOpExpr(tok, UnaryOpExpr.Opcode.Not, e) {
+      return new UnaryOpExpr(tok, UnaryOpExpr.Opcode.Not, e, tok) {
         Type = Type.Bool
       };
     }
@@ -10685,6 +10685,7 @@ namespace Microsoft.Dafny {
   public class OldExpr : Expression {
     [Peer]
     public readonly Expression E;
+    public readonly IToken CloseParenTok;
     public readonly string/*?*/ At;
     public Label/*?*/ AtLabel;  // filled in during resolution; after that, At==null iff AtLabel==null
     [ContractInvariantMethod]
@@ -10693,13 +10694,14 @@ namespace Microsoft.Dafny {
     }
 
     [Captured]
-    public OldExpr(IToken tok, Expression expr, string at = null)
+    public OldExpr(IToken tok, Expression expr, IToken closeParenTok, string at = null)
       : base(tok) {
       Contract.Requires(tok != null);
       Contract.Requires(expr != null);
       cce.Owner.AssignSame(this, expr);
       E = expr;
       At = at;
+      CloseParenTok = closeParenTok;
     }
 
     public override IEnumerable<Expression> SubExpressions {
@@ -10711,17 +10713,19 @@ namespace Microsoft.Dafny {
     public readonly List<FrameExpression> Frame;
     public readonly string/*?*/ At;
     public Label/*?*/ AtLabel;  // filled in during resolution; after that, At==null iff AtLabel==null
+    public IToken LastToken;
     [ContractInvariantMethod]
     void ObjectInvariant() {
       Contract.Invariant(Frame != null);
     }
 
-    public UnchangedExpr(IToken tok, List<FrameExpression> frame, string/*?*/ at)
+    public UnchangedExpr(IToken tok, List<FrameExpression> frame, string/*?*/ at, IToken lastToken)
       : base(tok) {
       Contract.Requires(tok != null);
       Contract.Requires(frame != null);
       this.Frame = frame;
       this.At = at;
+      this.LastToken = lastToken;
     }
 
     public override IEnumerable<Expression> SubExpressions {
@@ -10761,13 +10765,15 @@ namespace Microsoft.Dafny {
       Lit,  // there is no syntax for this operator, but it is sometimes introduced during translation
     }
     public readonly Opcode Op;
+    public readonly IToken LastToken;
 
-    public UnaryOpExpr(IToken tok, Opcode op, Expression e)
+    public UnaryOpExpr(IToken tok, Opcode op, Expression e, IToken lastToken)
       : base(tok, e) {
       Contract.Requires(tok != null);
       Contract.Requires(e != null);
       Contract.Requires(op != Opcode.Fresh || this is FreshExpr);
       this.Op = op;
+      this.LastToken = lastToken;
     }
   }
 
@@ -10775,8 +10781,8 @@ namespace Microsoft.Dafny {
     public readonly string/*?*/ At;
     public Label/*?*/ AtLabel;  // filled in during resolution; after that, At==null iff AtLabel==null
 
-    public FreshExpr(IToken tok, Expression e, string at = null)
-      : base(tok, Opcode.Fresh, e) {
+    public FreshExpr(IToken tok, Expression e, IToken lastToken, string at = null)
+      : base(tok, Opcode.Fresh, e, lastToken) {
       Contract.Requires(tok != null);
       Contract.Requires(e != null);
       this.At = at;
@@ -12592,6 +12598,7 @@ namespace Microsoft.Dafny {
   public class AttributedExpression {
     public readonly Expression E;
     public readonly AssertLabel/*?*/ Label;
+    public readonly IToken SemicolonToken;
 
     [ContractInvariantMethod]
     void ObjectInvariant() {
@@ -12613,21 +12620,23 @@ namespace Microsoft.Dafny {
     }
 
     public AttributedExpression(Expression e)
-      : this(e, null) {
+      : this(e, null, null) {
       Contract.Requires(e != null);
     }
 
-    public AttributedExpression(Expression e, Attributes attrs) {
+    public AttributedExpression(Expression e, Attributes attrs, IToken semiToken) {
       Contract.Requires(e != null);
       E = e;
       Attributes = attrs;
+      SemicolonToken = semiToken;
     }
 
-    public AttributedExpression(Expression e, AssertLabel/*?*/ label, Attributes attrs) {
+    public AttributedExpression(Expression e, AssertLabel/*?*/ label, Attributes attrs, IToken semiToken) {
       Contract.Requires(e != null);
       E = e;
       Label = label;
       Attributes = attrs;
+      SemicolonToken = semiToken;
     }
 
     public void AddCustomizedErrorMessage(IToken tok, string s) {

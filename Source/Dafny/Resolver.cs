@@ -2959,7 +2959,7 @@ namespace Microsoft.Dafny {
               CollectFriendlyCallsInExtremeLemmaSpecification(p.E, true, antecedents, false, com);
               var subst = new ExtremeLemmaSpecificationSubstituter(antecedents, new IdentifierExpr(k.tok, k.Name), this.reporter, false);
               var pre = subst.CloneExpr(p.E);
-              prefixLemma.Req.Add(new AttributedExpression(pre, p.Label, null));
+              prefixLemma.Req.Add(new AttributedExpression(pre, p.Label, null, null));
               foreach (var e in antecedents) {
                 var fce = (FunctionCallExpr)e;  // we expect "antecedents" to contain only FunctionCallExpr's
                 LeastPredicate predicate = (LeastPredicate)fce.Function;
@@ -10554,7 +10554,7 @@ namespace Microsoft.Dafny {
       }
       ens.Add(new AttributedExpression(new BinaryExpr(iter.tok, BinaryExpr.Opcode.Eq,
         new MemberSelectExpr(iter.tok, new ThisExpr(iter.tok), "_reads"),
-        new OldExpr(iter.tok, frameSet))));
+        new OldExpr(iter.tok, frameSet, iter.tok))));
       // ensures this._modifies == old(ModifiesClause);
       modSetSingletons = new List<Expression>();
       frameSet = new SetDisplayExpr(iter.tok, true, modSetSingletons, iter.tok);
@@ -10569,7 +10569,7 @@ namespace Microsoft.Dafny {
       }
       ens.Add(new AttributedExpression(new BinaryExpr(iter.tok, BinaryExpr.Opcode.Eq,
         new MemberSelectExpr(iter.tok, new ThisExpr(iter.tok), "_modifies"),
-        new OldExpr(iter.tok, frameSet))));
+        new OldExpr(iter.tok, frameSet, iter.tok))));
       // ensures this._new == {};
       ens.Add(new AttributedExpression(new BinaryExpr(iter.tok, BinaryExpr.Opcode.Eq,
         new MemberSelectExpr(iter.tok, new ThisExpr(iter.tok), "_new"),
@@ -10580,7 +10580,7 @@ namespace Microsoft.Dafny {
         var p = iter.Decreases.Expressions[i];
         ens.Add(new AttributedExpression(new BinaryExpr(iter.tok, BinaryExpr.Opcode.Eq,
           new MemberSelectExpr(iter.tok, new ThisExpr(iter.tok), iter.DecreasesFields[i].Name),
-          new OldExpr(iter.tok, p))));
+          new OldExpr(iter.tok, p, iter.tok))));
       }
 
       // ---------- here comes predicate Valid() ----------
@@ -10606,7 +10606,8 @@ namespace Microsoft.Dafny {
       ens.Add(new AttributedExpression(new FreshExpr(iter.tok,
         new BinaryExpr(iter.tok, BinaryExpr.Opcode.Sub,
           new MemberSelectExpr(iter.tok, new ThisExpr(iter.tok), "_new"),
-          new OldExpr(iter.tok, new MemberSelectExpr(iter.tok, new ThisExpr(iter.tok), "_new"))))));
+          new OldExpr(iter.tok, new MemberSelectExpr(iter.tok, new ThisExpr(iter.tok), "_new"), iter.tok)),
+          iter.tok)));
       // ensures null !in _new
       ens.Add(new AttributedExpression(new BinaryExpr(iter.tok, BinaryExpr.Opcode.NotIn,
         new LiteralExpr(iter.tok),
@@ -10623,9 +10624,9 @@ namespace Microsoft.Dafny {
         var ys = iter.OutsHistoryFields[i];
         var ite = new ITEExpr(iter.tok, false, new IdentifierExpr(iter.tok, "more"),
           new BinaryExpr(iter.tok, BinaryExpr.Opcode.Add,
-            new OldExpr(iter.tok, new MemberSelectExpr(iter.tok, new ThisExpr(iter.tok), ys.Name)),
+            new OldExpr(iter.tok, new MemberSelectExpr(iter.tok, new ThisExpr(iter.tok), ys.Name), iter.tok),
             new SeqDisplayExpr(iter.tok, new List<Expression>() { new MemberSelectExpr(iter.tok, new ThisExpr(iter.tok), y.Name) }, iter.tok)),
-          new OldExpr(iter.tok, new MemberSelectExpr(iter.tok, new ThisExpr(iter.tok), ys.Name)));
+          new OldExpr(iter.tok, new MemberSelectExpr(iter.tok, new ThisExpr(iter.tok), ys.Name), iter.tok));
         var eq = new BinaryExpr(iter.tok, BinaryExpr.Opcode.Eq, new MemberSelectExpr(iter.tok, new ThisExpr(iter.tok), ys.Name), ite);
         ens.Add(new AttributedExpression(eq));
       }
@@ -10638,7 +10639,7 @@ namespace Microsoft.Dafny {
       // ensures !more ==> Ensures;
       foreach (var e in iter.Ensures) {
         ens.Add(new AttributedExpression(new BinaryExpr(iter.tok, BinaryExpr.Opcode.Imp,
-          new UnaryOpExpr(iter.tok, UnaryOpExpr.Opcode.Not, new IdentifierExpr(iter.tok, "more")),
+          new UnaryOpExpr(iter.tok, UnaryOpExpr.Opcode.Not, new IdentifierExpr(iter.tok, "more"), iter.tok),
           e.E)
         ));
       }
@@ -13244,7 +13245,7 @@ namespace Microsoft.Dafny {
       s.ResolvedStatements.Add(up);
 
       if (s.KeywordToken != null) {
-        var notFailureExpr = new UnaryOpExpr(s.Tok, UnaryOpExpr.Opcode.Not, VarDotMethod(s.Tok, temp, "IsFailure"));
+        var notFailureExpr = new UnaryOpExpr(s.Tok, UnaryOpExpr.Opcode.Not, VarDotMethod(s.Tok, temp, "IsFailure"), s.Tok);
         Statement ss = null;
         if (s.KeywordToken.val == "expect") {
           // "expect !temp.IsFailure(), temp"
@@ -17733,7 +17734,7 @@ namespace Microsoft.Dafny {
       if (polarity) {
         yield return expr;
       } else {
-        expr = new UnaryOpExpr(expr.tok, UnaryOpExpr.Opcode.Not, expr);
+        expr = new UnaryOpExpr(expr.tok, UnaryOpExpr.Opcode.Not, expr, expr.tok);
         expr.Type = Type.Bool;
         yield return expr;
       }

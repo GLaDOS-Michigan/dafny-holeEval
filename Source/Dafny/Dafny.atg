@@ -1786,23 +1786,27 @@ RequiresClause<.List<AttributedExpression> req, bool allowLabel.>
 = "requires"    (. IToken lbl = null;
                    Attributes attrs = null;
                    Expression e;
+                   IToken x = null;
                  .)
   { Attribute<ref attrs> }
   [ IF(IsLabel(allowLabel))
     LabelName<out lbl> ":"
   ]
   Expression<out e, false, false>
-  OldSemi       (. req.Add(new AttributedExpression(e, lbl == null ? null : new AssertLabel(lbl, lbl.val), attrs)); .)
+  OldSemi       (. if (t.val == ";") x = t; 
+                    req.Add(new AttributedExpression(e, lbl == null ? null : new AssertLabel(lbl, lbl.val), attrs, x)); .)
   .
 
 /*------------------------------------------------------------------------*/
 EnsuresClause<.List<AttributedExpression> ens, bool allowLambda.>
 = "ensures"     (. Expression e;
                    Attributes attrs = null;
+                   IToken x = null;
                  .)
   { Attribute<ref attrs> }
   Expression<out e, false, allowLambda>
-  OldSemi       (. ens.Add(new AttributedExpression(e, attrs)); .)
+  OldSemi       (. if (t.val == ";") x = t;
+                   ens.Add(new AttributedExpression(e, attrs, x)); .)
   .
 
 /*------------------------------------------------------------------------*/
@@ -3729,7 +3733,7 @@ UnaryExpression<out Expression e, bool allowLemma, bool allowLambda, bool allowB
   ( "-"                                             (. x = t; .)
     UnaryExpression<out e, allowLemma, allowLambda, allowBitwiseOps>  (. e = new NegationExpression(x, e); .)
   | NegOp                                           (. x = t; .)
-    UnaryExpression<out e, allowLemma, allowLambda, allowBitwiseOps>  (. e = new UnaryOpExpr(x, UnaryOpExpr.Opcode.Not, e); .)
+    UnaryExpression<out e, allowLemma, allowLambda, allowBitwiseOps>  (. e = new UnaryOpExpr(x, UnaryOpExpr.Opcode.Not, e, null); .)
   | PrimaryExpression<out e, allowLemma, allowLambda, allowBitwiseOps>
   )
   .
@@ -3773,26 +3777,27 @@ ConstAtomExpression<out Expression e>
 = (. Contract.Ensures(Contract.ValueAtReturn(out e) != null);
      IToken/*!*/ x;
      e = dummyExpr;
+     IToken lastToken = null;
   .)
   ( LiteralExpression<out e>
   | "this"                                     (. e = new ThisExpr(t); .)
   | "allocated"                                (. x = t; .)
-    "(" Expression<out e, true, true> ")"      (. e = new UnaryOpExpr(x, UnaryOpExpr.Opcode.Allocated, e); .)
+    "(" Expression<out e, true, true> ")"      (. lastToken = t; e = new UnaryOpExpr(x, UnaryOpExpr.Opcode.Allocated, e, lastToken); .)
   | "fresh"                                    (. x = t; IToken atLabel = null; .)
     [ "@" LabelName<out atLabel> ]
-    "(" Expression<out e, true, true> ")"      (. e = new FreshExpr(x, e, atLabel?.val); .)
+    "(" Expression<out e, true, true> ")"      (. lastToken = t; e = new FreshExpr(x, e, lastToken, atLabel?.val); .)
   | "unchanged"                                (. x = t; FrameExpression fe; var mod = new List<FrameExpression>(); IToken atLabel = null; .)
     [ "@" LabelName<out atLabel> ]
     "("
       FrameExpression<out fe, false, false>         (. mod.Add(fe); .)
       { "," FrameExpression<out fe, false, false>   (. mod.Add(fe); .)
       }
-    ")"                                        (. e = new UnchangedExpr(x, mod, atLabel?.val); .)
+    ")"                                        (. lastToken = t; e = new UnchangedExpr(x, mod, atLabel?.val, lastToken); .)
   | "old"                                      (. x = t; IToken atLabel = null; .)
     [ "@" LabelName<out atLabel> ]
-    "(" Expression<out e, true, true> ")"      (. e = new OldExpr(x, e, atLabel?.val); .)
+    "(" Expression<out e, true, true> ")"      (. lastToken = t; e = new OldExpr(x, e, lastToken, atLabel?.val); .)
   | "|"                                        (. x = t; .)
-      Expression<out e, true, true, false>     (. e = new UnaryOpExpr(x, UnaryOpExpr.Opcode.Cardinality, e); .)
+      Expression<out e, true, true, false>     (. lastToken = la; e = new UnaryOpExpr(x, UnaryOpExpr.Opcode.Cardinality, e, lastToken); .)
     "|"
   | ParensExpression<out e>
   )

@@ -1815,7 +1815,7 @@ namespace Microsoft.Dafny {
         if (codeContext is IteratorDecl iter) {
           var th = new ThisExpr(iter);
           var thisDotNew = new MemberSelectExpr(s.Tok, th, iter.Member_New);
-          var fr = new FreshExpr(s.Tok, thisDotNew);
+          var fr = new FreshExpr(s.Tok, thisDotNew, s.Tok);
           fr.Type = Type.Bool;
           invariants.Add(TrAssertCmd(s.Tok, etran.TrExpr(fr)));
         }

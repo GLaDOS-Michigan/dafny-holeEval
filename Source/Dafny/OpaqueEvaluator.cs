@@ -280,14 +280,14 @@ namespace Microsoft.Dafny {
                             Contract.Assert(resolvedFailedFunc != null);
                             if (failedProof.Line < resolvedFailedFunc.BodyStartTok.line ||
                                 (failedProof.Line == resolvedFailedFunc.BodyStartTok.line 
-                                    && failedProof.Column < resolvedFailedFunc.BodyStartTok.col) || (retries >= 2)) {
+                                    && failedProof.Column < resolvedFailedFunc.BodyStartTok.col) || (retries >= 4)) {
                                 if (resolvedFailedFunc is Function) {
                                     foreach (var req in (resolvedFailedFunc as Function).Req) {
                                         if (includeParser.Normalized(req.E.tok.filename) != includeParser.Normalized(resolvedFailedFunc.tok.filename)) {
                                             continue;
                                         }
-                                        var firstToken = DafnyVerifierClient.GetFirstToken(req.E);
-                                        var lastToken = DafnyVerifierClient.GetLastToken(req.E);
+                                        var firstToken = DafnyVerifierClient.GetFirstToken(req);
+                                        var lastToken = DafnyVerifierClient.GetLastToken(req);
                                         if (firstToken != null && lastToken != null && 
                                             ((firstToken.line <= failedProof.Line && failedProof.Line <= lastToken.line) ||
                                             retries >= 2)) {
@@ -300,8 +300,8 @@ namespace Microsoft.Dafny {
                                         if (includeParser.Normalized(ens.E.tok.filename) != includeParser.Normalized(resolvedFailedFunc.tok.filename)) {
                                             continue;
                                         }
-                                        var firstToken = DafnyVerifierClient.GetFirstToken(ens.E);
-                                        var lastToken = DafnyVerifierClient.GetLastToken(ens.E);
+                                        var firstToken = DafnyVerifierClient.GetFirstToken(ens);
+                                        var lastToken = DafnyVerifierClient.GetLastToken(ens);
                                         if (firstToken != null && lastToken != null && 
                                             ((firstToken.line <= failedProof.Line && failedProof.Line <= lastToken.line) ||
                                             retries >= 2)) {
@@ -315,8 +315,8 @@ namespace Microsoft.Dafny {
                                         if (includeParser.Normalized(req.E.tok.filename) != includeParser.Normalized(resolvedFailedFunc.tok.filename)) {
                                             continue;
                                         }
-                                        var firstToken = DafnyVerifierClient.GetFirstToken(req.E);
-                                        var lastToken = DafnyVerifierClient.GetLastToken(req.E);
+                                        var firstToken = DafnyVerifierClient.GetFirstToken(req);
+                                        var lastToken = DafnyVerifierClient.GetLastToken(req);
                                         if (firstToken != null && lastToken != null && 
                                             ((firstToken.line <= failedProof.Line && failedProof.Line <= lastToken.line) ||
                                             retries >= 2)) {
@@ -329,8 +329,8 @@ namespace Microsoft.Dafny {
                                         if (includeParser.Normalized(ens.E.tok.filename) != includeParser.Normalized(resolvedFailedFunc.tok.filename)) {
                                             continue;
                                         }
-                                        var firstToken = DafnyVerifierClient.GetFirstToken(ens.E);
-                                        var lastToken = DafnyVerifierClient.GetLastToken(ens.E);
+                                        var firstToken = DafnyVerifierClient.GetFirstToken(ens);
+                                        var lastToken = DafnyVerifierClient.GetLastToken(ens);
                                         if (firstToken != null && lastToken != null && 
                                             ((firstToken.line <= failedProof.Line && failedProof.Line <= lastToken.line) ||
                                             retries >= 2)) {
@@ -343,8 +343,8 @@ namespace Microsoft.Dafny {
                                         if (includeParser.Normalized(req.E.tok.filename) != includeParser.Normalized(resolvedFailedFunc.tok.filename)) {
                                             continue;
                                         }
-                                        var firstToken = DafnyVerifierClient.GetFirstToken(req.E);
-                                        var lastToken = DafnyVerifierClient.GetLastToken(req.E);
+                                        var firstToken = DafnyVerifierClient.GetFirstToken(req);
+                                        var lastToken = DafnyVerifierClient.GetLastToken(req);
                                         if (firstToken != null && lastToken != null && 
                                             ((firstToken.line <= failedProof.Line && failedProof.Line <= lastToken.line) ||
                                             retries >= 2)) {
@@ -357,8 +357,8 @@ namespace Microsoft.Dafny {
                                         if (includeParser.Normalized(ens.E.tok.filename) != includeParser.Normalized(resolvedFailedFunc.tok.filename)) {
                                             continue;
                                         }
-                                        var firstToken = DafnyVerifierClient.GetFirstToken(ens.E);
-                                        var lastToken = DafnyVerifierClient.GetLastToken(ens.E);
+                                        var firstToken = DafnyVerifierClient.GetFirstToken(ens);
+                                        var lastToken = DafnyVerifierClient.GetLastToken(ens);
                                         if (firstToken != null && lastToken != null && 
                                             ((firstToken.line <= failedProof.Line && failedProof.Line <= lastToken.line) ||
                                             retries >= 2)) {
