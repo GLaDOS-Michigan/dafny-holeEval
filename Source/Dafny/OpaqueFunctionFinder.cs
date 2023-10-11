@@ -35,6 +35,9 @@ namespace Microsoft.Dafny {
 
     public IEnumerable<Function> GetOpaqueNonOpaquePredicates(Program program, bool findOpaque) {
       foreach (var kvp in program.ModuleSigs) {
+        if (kvp.Value.ModuleDef.IsAbstract) {
+          continue;
+        }
         foreach (var d in kvp.Value.ModuleDef.TopLevelDecls) {
           var cl = d as TopLevelDeclWithMembers;
           if (cl != null) {

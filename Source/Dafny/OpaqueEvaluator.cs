@@ -213,6 +213,7 @@ namespace Microsoft.Dafny {
             var opaqueFunctionFinder = new OpaqueFunctionFinder();
             int startEnvId = 0;
             int endEnvId = -1;
+
             foreach (var nonOpaqueFunc in opaqueFunctionFinder.GetOpaqueNonOpaquePredicates(program, false)) {
                 if (DafnyOptions.O.HoleEvaluatorSpecifiedFunc != "" && nonOpaqueFunc.FullDafnyName != DafnyOptions.O.HoleEvaluatorSpecifiedFunc) {
                     continue;
@@ -282,6 +283,9 @@ namespace Microsoft.Dafny {
                                     && failedProof.Column < resolvedFailedFunc.BodyStartTok.col) || (retries >= 2)) {
                                 if (resolvedFailedFunc is Function) {
                                     foreach (var req in (resolvedFailedFunc as Function).Req) {
+                                        if (includeParser.Normalized(req.E.tok.filename) != includeParser.Normalized(resolvedFailedFunc.tok.filename)) {
+                                            continue;
+                                        }
                                         var firstToken = DafnyVerifierClient.GetFirstToken(req.E);
                                         var lastToken = DafnyVerifierClient.GetLastToken(req.E);
                                         if (firstToken != null && lastToken != null && 
@@ -293,6 +297,9 @@ namespace Microsoft.Dafny {
                                     }
 
                                     foreach (var ens in (resolvedFailedFunc as Function).Ens) {
+                                        if (includeParser.Normalized(ens.E.tok.filename) != includeParser.Normalized(resolvedFailedFunc.tok.filename)) {
+                                            continue;
+                                        }
                                         var firstToken = DafnyVerifierClient.GetFirstToken(ens.E);
                                         var lastToken = DafnyVerifierClient.GetLastToken(ens.E);
                                         if (firstToken != null && lastToken != null && 
@@ -305,6 +312,9 @@ namespace Microsoft.Dafny {
                                 }
                                 else if (resolvedFailedFunc is Lemma) {
                                     foreach (var req in (resolvedFailedFunc as Lemma).Req) {
+                                        if (includeParser.Normalized(req.E.tok.filename) != includeParser.Normalized(resolvedFailedFunc.tok.filename)) {
+                                            continue;
+                                        }
                                         var firstToken = DafnyVerifierClient.GetFirstToken(req.E);
                                         var lastToken = DafnyVerifierClient.GetLastToken(req.E);
                                         if (firstToken != null && lastToken != null && 
@@ -316,6 +326,37 @@ namespace Microsoft.Dafny {
                                     }
 
                                     foreach (var ens in (resolvedFailedFunc as Lemma).Ens) {
+                                        if (includeParser.Normalized(ens.E.tok.filename) != includeParser.Normalized(resolvedFailedFunc.tok.filename)) {
+                                            continue;
+                                        }
+                                        var firstToken = DafnyVerifierClient.GetFirstToken(ens.E);
+                                        var lastToken = DafnyVerifierClient.GetLastToken(ens.E);
+                                        if (firstToken != null && lastToken != null && 
+                                            ((firstToken.line <= failedProof.Line && failedProof.Line <= lastToken.line) ||
+                                            retries >= 2)) {
+                                            Change ensChange = new Change(firstToken, lastToken, $"ensures (reveal_{opaquedFunc.Name}(); {Printer.ExprToString(ens.E)})", "ensures");
+                                            DafnyVerifierClient.AddFileToChangeList(ref changeList, ensChange);
+                                        }
+                                    }
+                                } else if (resolvedFailedFunc is Method) {
+                                    foreach (var req in (resolvedFailedFunc as Method).Req) {
+                                        if (includeParser.Normalized(req.E.tok.filename) != includeParser.Normalized(resolvedFailedFunc.tok.filename)) {
+                                            continue;
+                                        }
+                                        var firstToken = DafnyVerifierClient.GetFirstToken(req.E);
+                                        var lastToken = DafnyVerifierClient.GetLastToken(req.E);
+                                        if (firstToken != null && lastToken != null && 
+                                            ((firstToken.line <= failedProof.Line && failedProof.Line <= lastToken.line) ||
+                                            retries >= 2)) {
+                                            Change reqChange = new Change(firstToken, lastToken, $"requires (reveal_{opaquedFunc.Name}(); {Printer.ExprToString(req.E)})", "requires");
+                                            DafnyVerifierClient.AddFileToChangeList(ref changeList, reqChange);
+                                        }
+                                    }
+
+                                    foreach (var ens in (resolvedFailedFunc as Method).Ens) {
+                                        if (includeParser.Normalized(ens.E.tok.filename) != includeParser.Normalized(resolvedFailedFunc.tok.filename)) {
+                                            continue;
+                                        }
                                         var firstToken = DafnyVerifierClient.GetFirstToken(ens.E);
                                         var lastToken = DafnyVerifierClient.GetLastToken(ens.E);
                                         if (firstToken != null && lastToken != null && 
@@ -353,14 +394,34 @@ namespace Microsoft.Dafny {
                             }
                             else if (resolvedFailedFunc != null && resolvedFailedFunc is Lemma) {
                                 var unresolvedFailedLemma = HoleEvaluator.GetMemberFromUnresolved(unresolvedProgram, resolvedFailedFunc.FullDafnyName) as Lemma;
-                                if (failedProof.Line < unresolvedFailedLemma.Body.Tok.line || retries >= 2)
-                                {
+                                if (unresolvedFailedLemma.Body == null) {
+                                    var fuelAttributeExprList = new List<Expression>();
+                                    fuelAttributeExprList.Add(new NameSegment(opaquedFunc.tok, opaquedFunc.Name, null));
+                                    fuelAttributeExprList.Add(Expression.CreateIntLiteral(Token.NoToken, 1));
+                                    fuelAttributeExprList.Add(Expression.CreateIntLiteral(Token.NoToken, 2));
+                                    unresolvedFailedLemma.Attributes = new Attributes("fuel", fuelAttributeExprList, unresolvedFailedLemma.Attributes);
+                                    string lemmaString;
+                                    using (var wr = new System.IO.StringWriter())
+                                    {
+                                        var pr = new Printer(wr);
+                                        pr.PrintMethod(unresolvedFailedLemma, 0, false);
+                                        lemmaString = wr.ToString();
+                                    }
+                                    Change change = new Change(unresolvedFailedLemma.tok, unresolvedFailedLemma.BodyEndTok, lemmaString, unresolvedFailedLemma.WhatKind);
+                                    unresolvedFailedLemma.Attributes = unresolvedFailedLemma.Attributes.Prev;
+                                    DafnyVerifierClient.AddFileToChangeList(ref changeList, change);
+                                } else if (failedProof.Line < unresolvedFailedLemma.Body.Tok.line || retries >= 2) {
                                     var newLemmaBodyStr = $"{{reveal_{opaquedFunc.Name}();\n{Printer.StatementToString(unresolvedFailedLemma.Body)}\n}}";
                                     Change change = new Change(unresolvedFailedLemma.Body.Tok, unresolvedFailedLemma.BodyEndTok, newLemmaBodyStr, "");
                                     DafnyVerifierClient.AddFileToChangeList(ref changeList, change);
                                 } else {
                                     var changingStmt = CodeModifier.GetStatement(unresolvedFailedLemma.Body, failedProof.Line, failedProof.Column);
-                                    var newStmtStr = $"{{\nreveal_{opaquedFunc.Name}();\n{Printer.StatementToString(changingStmt)}\n}}";
+                                    string newStmtStr = "";
+                                    if (changingStmt is VarDeclStmt) {
+                                        newStmtStr = $"reveal_{opaquedFunc.Name}();\n{Printer.StatementToString(changingStmt)}\n";
+                                    } else {
+                                        newStmtStr = $"{{\nreveal_{opaquedFunc.Name}();\n{Printer.StatementToString(changingStmt)}\n}}";
+                                    }
                                     Change change = new Change(CodeModifier.GetStartingToken(changingStmt), changingStmt.EndTok, newStmtStr, "");
                                     DafnyVerifierClient.AddFileToChangeList(ref changeList, change);
                                 }
@@ -368,13 +429,34 @@ namespace Microsoft.Dafny {
                             else if (resolvedFailedFunc != null && resolvedFailedFunc is Method) {
                                 var unresolvedFailedMethod = HoleEvaluator.GetMemberFromUnresolved(unresolvedProgram, resolvedFailedFunc.FullDafnyName) as Method;
                                 Contract.Assert(unresolvedFailedMethod != null);
-                                if (failedProof.Line < unresolvedFailedMethod.Body.Tok.line || retries >= 1) {
+                                if (unresolvedFailedMethod.Body == null) {
+                                    var fuelAttributeExprList = new List<Expression>();
+                                    fuelAttributeExprList.Add(new NameSegment(opaquedFunc.tok, opaquedFunc.Name, null));
+                                    fuelAttributeExprList.Add(Expression.CreateIntLiteral(Token.NoToken, 1));
+                                    fuelAttributeExprList.Add(Expression.CreateIntLiteral(Token.NoToken, 2));
+                                    unresolvedFailedMethod.Attributes = new Attributes("fuel", fuelAttributeExprList, unresolvedFailedMethod.Attributes);
+                                    string methodString;
+                                    using (var wr = new System.IO.StringWriter())
+                                    {
+                                        var pr = new Printer(wr);
+                                        pr.PrintMethod(unresolvedFailedMethod, 0, false);
+                                        methodString = wr.ToString();
+                                    }
+                                    Change change = new Change(unresolvedFailedMethod.tok, unresolvedFailedMethod.BodyEndTok, methodString, unresolvedFailedMethod.WhatKind);
+                                    unresolvedFailedMethod.Attributes = unresolvedFailedMethod.Attributes.Prev;
+                                    DafnyVerifierClient.AddFileToChangeList(ref changeList, change);
+                                } else if (failedProof.Line < unresolvedFailedMethod.Body.Tok.line || retries >= 1) {
                                     var newMethodBodyStr = $"{{reveal_{opaquedFunc.Name}();\n{Printer.StatementToString(unresolvedFailedMethod.Body)}\n}}";
                                     Change change = new Change(unresolvedFailedMethod.Body.Tok, unresolvedFailedMethod.Body.EndTok, newMethodBodyStr, "");
                                     DafnyVerifierClient.AddFileToChangeList(ref changeList, change);
                                 } else {
                                     var changingStmt = CodeModifier.GetStatement(unresolvedFailedMethod.Body, failedProof.Line, failedProof.Column);
-                                    var newStmtStr = $"{{\nreveal_{opaquedFunc.Name}();\n{Printer.StatementToString(changingStmt)}\n}}";
+                                    string newStmtStr = "";
+                                    if (changingStmt is VarDeclStmt) {
+                                        newStmtStr = $"reveal_{opaquedFunc.Name}();\n{Printer.StatementToString(changingStmt)}\n";
+                                    } else {
+                                        newStmtStr = $"{{\nreveal_{opaquedFunc.Name}();\n{Printer.StatementToString(changingStmt)}\n}}";
+                                    }
                                     Change change = new Change(CodeModifier.GetStartingToken(changingStmt), changingStmt.EndTok, newStmtStr, "");
                                     DafnyVerifierClient.AddFileToChangeList(ref changeList, change);
                                 }

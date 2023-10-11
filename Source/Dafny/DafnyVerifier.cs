@@ -52,7 +52,7 @@ namespace Microsoft.Dafny {
       public string StartString;
       public string FileName
       {
-        get { return StartTok.filename; }
+        get { return IncludeParser.Normalized(StartTok.filename); }
       }
       public Change(IToken startTok, IToken endTok, string replacement, string startString)
       {
@@ -423,6 +423,20 @@ namespace Microsoft.Dafny {
 
     public static IToken GetLastToken(Method method) {
       var body = method.Body;
+      if (body == null) {
+        IToken lastToken = null;
+        foreach (var expr in method.SubExpressions) {
+          if (lastToken == null) {
+            lastToken = GetLastToken(expr);
+          } else {
+            var newToken = GetLastToken(expr);
+            if (newToken.line > lastToken.line || (newToken.line == lastToken.line && newToken.col > lastToken.col)) {
+              lastToken = newToken;
+            }
+          }
+        }
+        return lastToken;
+      }
       return body.EndTok;
     }
 

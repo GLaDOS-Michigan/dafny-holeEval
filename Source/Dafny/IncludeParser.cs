@@ -28,6 +28,23 @@ namespace Microsoft.Dafny {
       CreateIncludeGraph();
     }
 
+    public static string Normalized(string path)
+    {
+      var bracketIndex = path.IndexOf('[');
+      if (bracketIndex != -1) {
+        path = path.Remove(bracketIndex);
+      }
+      var directoryList = path.Split('/').ToList();
+      for (int i = 0; i < directoryList.Count; i++) {
+        if (directoryList[i] == "..") {
+          directoryList.RemoveAt(i - 1);
+          directoryList.RemoveAt(i - 1);
+          i -= 2;
+        }
+      }
+      return String.Join('/', directoryList);
+    }
+
     public string Normalized(string path, bool removePrefix = true)
     {
       if (removePrefix) {
