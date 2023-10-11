@@ -52,7 +52,7 @@ namespace Microsoft.Dafny {
       public string StartString;
       public string FileName
       {
-        get { return IncludeParser.Normalized(StartTok.filename); }
+        get { return IncludeParser.NormalizedRemoveLastBracket(StartTok.filename); }
       }
       public Change(IToken startTok, IToken endTok, string replacement, string startString)
       {

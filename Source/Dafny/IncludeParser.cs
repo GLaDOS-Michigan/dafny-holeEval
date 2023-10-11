@@ -28,7 +28,7 @@ namespace Microsoft.Dafny {
       CreateIncludeGraph();
     }
 
-    public static string Normalized(string path)
+    public static string NormalizedRemoveLastBracket(string path)
     {
       var bracketIndex = path.IndexOf('[');
       if (bracketIndex != -1) {
