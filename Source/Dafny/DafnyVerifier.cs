@@ -44,30 +44,26 @@ namespace Microsoft.Dafny {
     public Func<int, bool> OutputProcessorFunc;
     private Random rand = new Random();
 
-    public class Change
-    {
-      public IToken StartTok;
-      public IToken EndTok;
-      public string Replacement;
-      public string StartString;
-      public string FileName
+    public static Change CreateChange(
+        ChangeTypeEnum changeType,
+        IToken startTok,
+        IToken endTok,
+        string replacement,
+        string startString,
+        string addedString)
       {
-        get { return IncludeParser.NormalizedRemoveLastBracket(StartTok.filename); }
+        Change res = new Change();
+        res.ChangeType = changeType;
+        res.StartTokLine = startTok.line;
+        res.StartTokColumn = startTok.col;
+        res.EndTokLine = endTok.line;
+        res.EndTokColumn = endTok.col;
+        res.Replacement = replacement;
+        res.StartString = startString;
+        res.AddedString = addedString;
+        res.FileName = IncludeParser.NormalizedRemoveLastBracket(startTok.filename);
+        return res;
       }
-      public Change(IToken startTok, IToken endTok, string replacement, string startString)
-      {
-        this.StartTok = startTok;
-        this.EndTok = endTok;
-        this.Replacement = replacement;
-        this.StartString = startString;
-      }
-      public string ToJsonString() {
-        var str = $"{{\"StartTok\":{{\"line\":{StartTok.line},\"col\":{StartTok.col}}}";
-        str += $",\"EndTok\":{{\"line\":{EndTok.line},\"col\":{EndTok.col}}}";
-        str += $",\"Replacement\":\"{Replacement}\"}}";
-        return str;
-      }
-    }
 
     public static bool AddFileToChangeList(ref Dictionary<string, List<Change>> changeList, Change change) {
       if (!changeList.ContainsKey(change.FileName)) {
@@ -75,39 +71,39 @@ namespace Microsoft.Dafny {
       }
       for (int i = 0; i < changeList[change.FileName].Count; i++) {
         // complete override. remove previous one
-        if (change.StartTok.line <= changeList[change.FileName][i].StartTok.line && 
-            changeList[change.FileName][i].EndTok.line <= change.EndTok.line) {
+        if (change.StartTokLine <= changeList[change.FileName][i].StartTokLine && 
+            changeList[change.FileName][i].EndTokLine <= change.EndTokLine) {
               changeList[change.FileName].RemoveAt(i);
               i--;
               continue;
         }
-        if (change.StartTok.line == changeList[change.FileName][i].StartTok.line && 
-            changeList[change.FileName][i].EndTok.line == change.EndTok.line && 
-            change.StartTok.col <= changeList[change.FileName][i].StartTok.col && 
-            changeList[change.FileName][i].EndTok.col <= change.EndTok.col) {
+        if (change.StartTokLine == changeList[change.FileName][i].StartTokLine && 
+            changeList[change.FileName][i].EndTokLine == change.EndTokLine && 
+            change.StartTokColumn <= changeList[change.FileName][i].StartTokColumn && 
+            changeList[change.FileName][i].EndTokColumn <= change.EndTokColumn) {
               changeList[change.FileName].RemoveAt(i);
               i--;
               continue;
         }
         // a larger one already exists. ignore new one
-        if (changeList[change.FileName][i].StartTok.line < change.StartTok.line && 
-            change.EndTok.line < changeList[change.FileName][i].EndTok.line) {
+        if (changeList[change.FileName][i].StartTokLine < change.StartTokLine && 
+            change.EndTokLine < changeList[change.FileName][i].EndTokLine) {
               return false;
         }
-        if (changeList[change.FileName][i].StartTok.line < change.StartTok.line && 
-            change.EndTok.line == changeList[change.FileName][i].EndTok.line &&
-            change.EndTok.col <= changeList[change.FileName][i].EndTok.line) {
+        if (changeList[change.FileName][i].StartTokLine < change.StartTokLine && 
+            change.EndTokLine == changeList[change.FileName][i].EndTokLine &&
+            change.EndTokColumn <= changeList[change.FileName][i].EndTokLine) {
               return false;
         }
-        if (changeList[change.FileName][i].StartTok.line == change.StartTok.line && 
-            changeList[change.FileName][i].StartTok.col <= change.StartTok.col && 
-            change.EndTok.line < changeList[change.FileName][i].EndTok.line) {
+        if (changeList[change.FileName][i].StartTokLine == change.StartTokLine && 
+            changeList[change.FileName][i].StartTokColumn <= change.StartTokColumn && 
+            change.EndTokLine < changeList[change.FileName][i].EndTokLine) {
               return false;
         }
       }
       int index;
       for (index = 0; index < changeList[change.FileName].Count; index++) {
-        if (change.StartTok.line > changeList[change.FileName][index].EndTok.line) {
+        if (change.StartTokLine > changeList[change.FileName][index].EndTokLine) {
           break;
         }
       }
@@ -209,12 +205,12 @@ namespace Microsoft.Dafny {
       foreach (var fileChangesTuple in changeList) {
         var code = File.ReadAllLines(fileChangesTuple.Key);
         foreach (var change in fileChangesTuple.Value) {
-          var startTokLine = change.StartTok.line;
-          var startTokCol = change.StartTok.col;
+          var startTokLine = change.StartTokLine;
+          var startTokCol = change.StartTokColumn;
           startTokLine--;
           startTokCol--;
-          var endTokLine = change.EndTok.line;
-          var endTokCol = change.EndTok.col;
+          var endTokLine = change.EndTokLine;
+          var endTokCol = change.EndTokColumn;
           endTokLine--;
           endTokCol--;
           if (change.StartString != "") {
@@ -231,7 +227,7 @@ namespace Microsoft.Dafny {
           }
           if (startTokCol >= code[startTokLine].Length) {
             Console.WriteLine($"incorrect change in environment #{EnvironmentSetupTasks.Count - 1}");
-            Console.WriteLine($"{change.ToJsonString()}");
+            Console.WriteLine($"{change.ToString()}");
           }
           code[startTokLine] = code[startTokLine].Substring(0, startTokCol) + change.Replacement.Replace("\n", " ");
           for (int i = startTokLine + 1; i < endTokLine; i++) {
@@ -252,7 +248,7 @@ namespace Microsoft.Dafny {
       return EnvironmentSetupTasks.Count - 1;
     }
 
-    public void AddVerificationRequestToEnvironment(int envId, string code, string filename, List<string> args, string timeout = "1h") {
+    public void AddVerificationRequestToEnvironment(int envId, string code, string filename, List<string> args, string timeout = "20m") {
       Contract.Assert(envId >= 0);
       Contract.Assert(envId < EnvironmentVerificationTasks.Count);
       VerificationRequest request = new VerificationRequest();
@@ -817,7 +813,7 @@ namespace Microsoft.Dafny {
     }
 
     public VerificationRequest GetFileRewriteRequest(string code, ExpressionFinder.ExpressionDepth exprDepth,
-        int cnt, string remoteFilePath, string timeout = "1h") {
+        int cnt, string remoteFilePath, string timeout = "20m") {
       VerificationRequest request = new VerificationRequest();
       request.Code = code;
       request.Path = remoteFilePath;
@@ -828,7 +824,7 @@ namespace Microsoft.Dafny {
     }
 
     public VerificationRequest GetVerificationRequest(string code, List<string> args, ExpressionFinder.ExpressionDepth exprDepth,
-        int cnt, int postConditionPos, int lemmaStartPos, string remoteFilePath, string timeout = "1h") {
+        int cnt, int postConditionPos, int lemmaStartPos, string remoteFilePath, string timeout = "20m") {
       VerificationRequest request = new VerificationRequest();
       request.Code = code;
       request.Path = remoteFilePath;
@@ -844,7 +840,7 @@ namespace Microsoft.Dafny {
     }
 
     public VerificationRequest GetVerificationRequestForProof(string code, List<string> args, List<ProofEvaluator.ExprStmtUnion> exprStmtList,
-        int cnt, string filePath, string lemmaName, string timeout = "1h") {
+        int cnt, string filePath, string lemmaName, string timeout = "20m") {
       VerificationRequest request = new VerificationRequest();
       request.Code = code;
       request.Path = filePath;
@@ -923,7 +919,7 @@ namespace Microsoft.Dafny {
       // dafnyOutput[request] = new VerificationResponseList();
     }
 
-  //   public void runDafnyProofCheck(string code, List<string> args, List<ProofEvaluator.ExprStmtUnion> exprStmtList, int cnt, string timeout = "1h") {
+  //   public void runDafnyProofCheck(string code, List<string> args, List<ProofEvaluator.ExprStmtUnion> exprStmtList, int cnt, string timeout = "20m") {
   //     sentRequests++;
   //     // if (sentRequests == 500) {
   //     //   sentRequests = 0;

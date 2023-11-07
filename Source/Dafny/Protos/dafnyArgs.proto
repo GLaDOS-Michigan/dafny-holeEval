@@ -14,3 +14,26 @@ message VerificationTaskArgs {
 message TasksList {
   repeated VerificationTaskArgs tasks = 1;
 }
+
+enum ChangeTypeEnum {
+  AddOpaqueAttribute = 0;
+  AddRevealStatement = 1;
+  AddFuelAttribute = 2;
+  AddImport = 3;
+}
+
+message Change {
+  ChangeTypeEnum ChangeType = 1;
+  string FileName = 2;
+  int32 StartTokLine = 3;
+  int32 StartTokColumn = 4;
+  int32 EndTokLine = 5;
+  int32 EndTokColumn = 6;
+  string Replacement = 7;
+  string StartString = 8;
+  string AddedString = 9;
+}
+
+message ChangeList {
+  repeated Change changes = 1;
+}
