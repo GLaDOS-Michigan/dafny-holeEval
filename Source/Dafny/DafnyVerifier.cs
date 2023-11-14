@@ -526,7 +526,7 @@ namespace Microsoft.Dafny {
       }
     }
 
-    public static List<ProofFailResult> GetFailingFunctionResults(string filename, string output) {
+    public static List<ProofFailResult> GetFailingFunctionResults(string funcName, string filename, string output) {
       List<ProofFailResult> res = new List<ProofFailResult>();
       var outputList = output.Split("\nVerifying ").ToList();
       if (!output.EndsWith(" 0 errors\n")) {
@@ -586,6 +586,9 @@ namespace Microsoft.Dafny {
             }
           }
         }
+      }
+      if (res.Count == 0 && funcName != "") {
+        res.Add(new ProofFailResult($"$${funcName}", filename, -1, -1));
       }
       return res;
     }

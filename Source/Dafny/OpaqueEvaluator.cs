@@ -156,6 +156,10 @@ namespace Microsoft.Dafny {
                 var output = TSOutput.ResponseList[i];
                 var response = output.Response.ToStringUtf8();
                 var filePath = output.FileName;
+                string sanitizedFuncName = "";
+                if (request.Arguments[request.Arguments.Count - 1].StartsWith("/proc:*")) {
+                    sanitizedFuncName = request.Arguments[request.Arguments.Count - 1].Substring(7);
+                }
                 if (DafnyOptions.O.HoleEvaluatorVerboseMode)
                 {
                     Console.WriteLine($"{index} output for maintain lemma:\n{response}");
@@ -163,7 +167,7 @@ namespace Microsoft.Dafny {
                 Result res = DafnyVerifierClient.IsCorrectOutputForNoErrors(response);
                 if (res != Result.CorrectProof)
                 {
-                    result[i] = DafnyVerifierClient.GetFailingFunctionResults(filePath, response);
+                    result[i] = DafnyVerifierClient.GetFailingFunctionResults(sanitizedFuncName, filePath, response);
                 }
             }
             return result;
@@ -172,6 +176,7 @@ namespace Microsoft.Dafny {
         public Dictionary<int, Tuple<Program, Dictionary<string, List<Change>>>> EnvIdToChangeList =
                 new Dictionary<int, Tuple<Program, Dictionary<string, List<Change>>>>();
         public Dictionary<int, Function> EnvIdToNonOpaqueFunc = new Dictionary<int, Function>();
+        public Dictionary<string, ModuleDefinition> FileNameToModuleDict = new Dictionary<string, ModuleDefinition>();
         public PriorityQueue<int, UInt64> ExecutionTimeEnvIdTupleList = new PriorityQueue<int, UInt64>();
 
         public string ChangeListToString(int envId) {
@@ -213,6 +218,36 @@ namespace Microsoft.Dafny {
             return changeList;
         }
 
+        public int GetTimelimitMultiplier(Attributes attrs) {
+            if (attrs == null) {
+                return 1;
+            } else {
+                if (attrs.Name == "timeLimitMultiplier") {
+                    int multiplier = 0;
+                    Contract.Assert(Int32.TryParse(Printer.ExprToString(attrs.Args[0]), out multiplier));
+                    return multiplier;
+                } else {
+                    return GetTimelimitMultiplier(attrs.Prev);
+                }
+            }
+        }
+
+        public void AddVerificationRequestPerCallable(int envId, string filename, List<string> baseArgs) {
+
+            foreach (var func in ModuleDefinition.AllFunctions(FileNameToModuleDict[filename].TopLevelDecls)) {
+                baseArgs.Add($"/proc:*{func.FullSanitizedName}");
+                var timeLimitMultiplier = GetTimelimitMultiplier(func.Attributes);
+                dafnyVerifier.AddVerificationRequestToEnvironment(envId, "", filename, baseArgs, $"{timeLimitMultiplier}m");
+                baseArgs.RemoveAt(baseArgs.Count - 1);
+            }
+            foreach (var lemma in ModuleDefinition.AllLemmas(FileNameToModuleDict[filename].TopLevelDecls)) {
+                baseArgs.Add($"/proc:*{lemma.FullSanitizedName}");
+                var timeLimitMultiplier = GetTimelimitMultiplier(lemma.Attributes);
+                dafnyVerifier.AddVerificationRequestToEnvironment(envId, "", filename, baseArgs, $"{timeLimitMultiplier}m");
+                baseArgs.RemoveAt(baseArgs.Count - 1);
+            }
+        }
+
         public async Task<bool> Evaluate(Program program, Program unresolvedProgram) {
             if (DafnyOptions.O.HoleEvaluatorCommands != null) {
                 var input = File.ReadAllText(DafnyOptions.O.HoleEvaluatorCommands);
@@ -228,6 +263,13 @@ namespace Microsoft.Dafny {
             var opaqueFunctionFinder = new OpaqueFunctionFinder();
             int startEnvId = 0;
             int endEnvId = -1;
+
+            foreach (var kvp in program.ModuleSigs) {
+                if (kvp.Value.ModuleDef.tok.filename != null) {
+                    var filename = includeParser.Normalized(kvp.Value.ModuleDef.tok.filename);
+                    FileNameToModuleDict[filename] = kvp.Value.ModuleDef;
+                }
+            }
 
             foreach (var nonOpaqueFunc in opaqueFunctionFinder.GetOpaqueNonOpaquePredicates(program, false)) {
                 if (DafnyOptions.O.HoleEvaluatorSpecifiedFunc != "" && nonOpaqueFunc.FullDafnyName != DafnyOptions.O.HoleEvaluatorSpecifiedFunc) {
@@ -245,7 +287,8 @@ namespace Microsoft.Dafny {
                 var affectedFiles = includeParser.GetListOfAffectedFilesBy(filename).ToList();
                 affectedFiles = affectedFiles.Distinct().ToList();
                 foreach (var file in affectedFiles) {
-                    dafnyVerifier.AddVerificationRequestToEnvironment(envId, "", file, tasksListDictionary[file].Arguments.ToList());
+                    AddVerificationRequestPerCallable(envId, file, tasksListDictionary[file].Arguments.ToList());
+                    // dafnyVerifier.AddVerificationRequestToEnvironment(envId, "", file, tasksListDictionary[file].Arguments.ToList());
                 }
                 if (envId > endEnvId) {
                     endEnvId = envId;
@@ -497,13 +540,14 @@ namespace Microsoft.Dafny {
                     {
                         var fileIndex = failedProofList.Key;
                         var file = TSRequest.SecondStageRequestsList[fileIndex].Path;
-                        var argList = tasksListDictionary[file].Arguments.ToList();
-                        foreach (var failedProof in failedProofList.Value) {
-                            var sanitizedFuncName = failedProof.FuncBoogieName.Substring(failedProof.FuncBoogieName.IndexOf("$$") + 2);
-                            argList.Add($"/proc:*{sanitizedFuncName}*");
-                        }
-                        argList = argList.Distinct().ToList();
-                        dafnyVerifier.AddVerificationRequestToEnvironment(envId, "", file, argList);
+                        var argList = TSRequest.SecondStageRequestsList[fileIndex].Arguments.ToList();
+                        var timeout = TSRequest.SecondStageRequestsList[fileIndex].Timeout;
+                        // foreach (var failedProof in failedProofList.Value) {
+                        //     var sanitizedFuncName = failedProof.FuncBoogieName.Substring(failedProof.FuncBoogieName.IndexOf("$$") + 2);
+                        //     argList.Add($"/proc:*{sanitizedFuncName}*");
+                        // }
+                        // argList = argList.Distinct().ToList();
+                        dafnyVerifier.AddVerificationRequestToEnvironment(envId, "", file, argList, timeout);
                     }
                     if (envId > newEndEnvId)
                     {
