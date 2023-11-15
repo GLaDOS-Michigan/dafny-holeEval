@@ -234,17 +234,20 @@ namespace Microsoft.Dafny {
 
         public void AddVerificationRequestPerCallable(int envId, string filename, List<string> baseArgs) {
 
-            foreach (var func in ModuleDefinition.AllFunctions(FileNameToModuleDict[filename].TopLevelDecls)) {
-                baseArgs.Add($"/proc:*{func.FullSanitizedName}");
-                var timeLimitMultiplier = GetTimelimitMultiplier(func.Attributes);
-                dafnyVerifier.AddVerificationRequestToEnvironment(envId, "", filename, baseArgs, $"{timeLimitMultiplier}m");
-                baseArgs.RemoveAt(baseArgs.Count - 1);
-            }
-            foreach (var lemma in ModuleDefinition.AllLemmas(FileNameToModuleDict[filename].TopLevelDecls)) {
-                baseArgs.Add($"/proc:*{lemma.FullSanitizedName}");
-                var timeLimitMultiplier = GetTimelimitMultiplier(lemma.Attributes);
-                dafnyVerifier.AddVerificationRequestToEnvironment(envId, "", filename, baseArgs, $"{timeLimitMultiplier}m");
-                baseArgs.RemoveAt(baseArgs.Count - 1);
+            foreach (var callable in ModuleDefinition.AllCallables(FileNameToModuleDict[filename].TopLevelDecls)) {
+                if (callable is Method method) {
+                    baseArgs.Add($"/proc:*{method.FullSanitizedName}");
+                    var timeLimitMultiplier = GetTimelimitMultiplier(method.Attributes);
+                    dafnyVerifier.AddVerificationRequestToEnvironment(envId, "", filename, baseArgs, $"{timeLimitMultiplier}m");
+                    baseArgs.RemoveAt(baseArgs.Count - 1);
+                } else if (callable is Function func) {
+                    baseArgs.Add($"/proc:*{func.FullSanitizedName}");
+                    var timeLimitMultiplier = GetTimelimitMultiplier(func.Attributes);
+                    dafnyVerifier.AddVerificationRequestToEnvironment(envId, "", filename, baseArgs, $"{timeLimitMultiplier}m");
+                    baseArgs.RemoveAt(baseArgs.Count - 1);
+                } else {
+                    Console.WriteLine(callable.ToString());
+                }
             }
         }
 
