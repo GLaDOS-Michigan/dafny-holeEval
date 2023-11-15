@@ -89,5 +89,6 @@ message VerificationResponse {
   bytes response = 1;
   string fileName = 2;
   uint64 executionTimeInMs = 3;
+  int32 exitStatus = 4;
 }
 
