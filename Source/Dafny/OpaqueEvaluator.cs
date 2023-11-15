@@ -336,6 +336,27 @@ namespace Microsoft.Dafny {
                                 failedProof.FuncBoogieName = $"Impl$${resolvedFailedFunc.FullSanitizedName}";
                             }
                             Contract.Assert(resolvedFailedFunc != null);
+
+                            var moduleDef = resolvedFailedFunc.EnclosingClass.EnclosingModuleDefinition;
+                            var importType = DafnyVerifierClient.GetImportType(opaquedFuncModuleName, moduleDef);
+                            string revealPrefixModuleName = "";
+                            if (importType.Item1 != DafnyVerifierClient.ImportType.CompleteImport) {
+                                revealPrefixModuleName = $"{opaquedFuncModuleName}.";
+                            }
+                            if (!hasCheckedImport) {
+                                hasCheckedImport = true;
+                                if (importType.Item1 == DafnyVerifierClient.ImportType.NoImport) {
+                                    Change openModuleChange = DafnyVerifierClient.CreateChange(ChangeTypeEnum.AddImport, moduleDef.BodyStartTok, moduleDef.BodyStartTok, $"{{import {opaquedFuncModuleName}", "", $"{{import {opaquedFuncModuleName}");
+                                    DafnyVerifierClient.AddFileToChangeList(ref changeList, openModuleChange);
+                                }
+                                else if (importType.Item1 == DafnyVerifierClient.ImportType.SpecifiedImport) {
+                                    Contract.Assert(importType.Item2.Exports.Count > 0);
+                                    var lastExport = importType.Item2.Exports[importType.Item2.Exports.Count - 1];
+                                    Change openModuleChange = DafnyVerifierClient.CreateChange(ChangeTypeEnum.AddImport, importType.Item2.tok, lastExport, $"import {opaquedFuncModuleName}", "import", $"import {opaquedFuncModuleName}");
+                                    DafnyVerifierClient.AddFileToChangeList(ref changeList, openModuleChange);
+                                }
+                            }
+
                             if (failedProof.Line < resolvedFailedFunc.BodyStartTok.line ||
                                 (failedProof.Line == resolvedFailedFunc.BodyStartTok.line 
                                     && failedProof.Column < resolvedFailedFunc.BodyStartTok.col) || (retries >= 3)) {
@@ -350,7 +371,7 @@ namespace Microsoft.Dafny {
                                         if (firstToken != null && lastToken != null && 
                                             ((firstToken.line <= failedProof.Line && failedProof.Line <= lastToken.line) ||
                                             retries >= 2)) {
-                                            Change reqChange = DafnyVerifierClient.CreateChange(ChangeTypeEnum.AddRevealStatement, firstToken, lastToken, $"requires (reveal_{opaquedFunc.Name}(); {Printer.ExprToString(req.E)})", "requires", $"reveal_{opaquedFunc.Name}();");
+                                            Change reqChange = DafnyVerifierClient.CreateChange(ChangeTypeEnum.AddRevealStatement, firstToken, lastToken, $"requires ({revealPrefixModuleName}reveal_{opaquedFunc.Name}(); {Printer.ExprToString(req.E)})", "requires", $"{revealPrefixModuleName}reveal_{opaquedFunc.Name}();");
                                             DafnyVerifierClient.AddFileToChangeList(ref changeList, reqChange);
                                         }
                                     }
@@ -364,7 +385,7 @@ namespace Microsoft.Dafny {
                                         if (firstToken != null && lastToken != null && 
                                             ((firstToken.line <= failedProof.Line && failedProof.Line <= lastToken.line) ||
                                             retries >= 2)) {
-                                            Change ensChange = DafnyVerifierClient.CreateChange(ChangeTypeEnum.AddRevealStatement, firstToken, lastToken, $"ensures (reveal_{opaquedFunc.Name}(); {Printer.ExprToString(ens.E)})", "ensures", $"reveal_{opaquedFunc.Name}();");
+                                            Change ensChange = DafnyVerifierClient.CreateChange(ChangeTypeEnum.AddRevealStatement, firstToken, lastToken, $"ensures ({revealPrefixModuleName}reveal_{opaquedFunc.Name}(); {Printer.ExprToString(ens.E)})", "ensures", $"{revealPrefixModuleName}reveal_{opaquedFunc.Name}();");
                                             DafnyVerifierClient.AddFileToChangeList(ref changeList, ensChange);
                                         }
                                     }
@@ -380,7 +401,7 @@ namespace Microsoft.Dafny {
                                         if (firstToken != null && lastToken != null && 
                                             ((firstToken.line <= failedProof.Line && failedProof.Line <= lastToken.line) ||
                                             retries >= 2)) {
-                                            Change reqChange = DafnyVerifierClient.CreateChange(ChangeTypeEnum.AddRevealStatement, firstToken, lastToken, $"requires (reveal_{opaquedFunc.Name}(); {Printer.ExprToString(req.E)})", "requires", $"reveal_{opaquedFunc.Name}();");
+                                            Change reqChange = DafnyVerifierClient.CreateChange(ChangeTypeEnum.AddRevealStatement, firstToken, lastToken, $"requires ({revealPrefixModuleName}reveal_{opaquedFunc.Name}(); {Printer.ExprToString(req.E)})", "requires", $"{revealPrefixModuleName}reveal_{opaquedFunc.Name}();");
                                             DafnyVerifierClient.AddFileToChangeList(ref changeList, reqChange);
                                         }
                                     }
@@ -394,7 +415,7 @@ namespace Microsoft.Dafny {
                                         if (firstToken != null && lastToken != null && 
                                             ((firstToken.line <= failedProof.Line && failedProof.Line <= lastToken.line) ||
                                             retries >= 2)) {
-                                            Change ensChange = DafnyVerifierClient.CreateChange(ChangeTypeEnum.AddRevealStatement, firstToken, lastToken, $"ensures (reveal_{opaquedFunc.Name}(); {Printer.ExprToString(ens.E)})", "ensures", $"reveal_{opaquedFunc.Name}();");
+                                            Change ensChange = DafnyVerifierClient.CreateChange(ChangeTypeEnum.AddRevealStatement, firstToken, lastToken, $"ensures ({revealPrefixModuleName}reveal_{opaquedFunc.Name}(); {Printer.ExprToString(ens.E)})", "ensures", $"{revealPrefixModuleName}reveal_{opaquedFunc.Name}();");
                                             DafnyVerifierClient.AddFileToChangeList(ref changeList, ensChange);
                                         }
                                     }
@@ -409,7 +430,7 @@ namespace Microsoft.Dafny {
                                         if (firstToken != null && lastToken != null && 
                                             ((firstToken.line <= failedProof.Line && failedProof.Line <= lastToken.line) ||
                                             retries >= 2)) {
-                                            Change reqChange = DafnyVerifierClient.CreateChange(ChangeTypeEnum.AddRevealStatement, firstToken, lastToken, $"requires (reveal_{opaquedFunc.Name}(); {Printer.ExprToString(req.E)})", "requires", $"reveal_{opaquedFunc.Name}();");
+                                            Change reqChange = DafnyVerifierClient.CreateChange(ChangeTypeEnum.AddRevealStatement, firstToken, lastToken, $"requires ({revealPrefixModuleName}reveal_{opaquedFunc.Name}(); {Printer.ExprToString(req.E)})", "requires", $"{revealPrefixModuleName}reveal_{opaquedFunc.Name}();");
                                             DafnyVerifierClient.AddFileToChangeList(ref changeList, reqChange);
                                         }
                                     }
@@ -423,34 +444,18 @@ namespace Microsoft.Dafny {
                                         if (firstToken != null && lastToken != null && 
                                             ((firstToken.line <= failedProof.Line && failedProof.Line <= lastToken.line) ||
                                             retries >= 2)) {
-                                            Change ensChange = DafnyVerifierClient.CreateChange(ChangeTypeEnum.AddRevealStatement, firstToken, lastToken, $"ensures (reveal_{opaquedFunc.Name}(); {Printer.ExprToString(ens.E)})", "ensures", $"reveal_{opaquedFunc.Name}();");
+                                            Change ensChange = DafnyVerifierClient.CreateChange(ChangeTypeEnum.AddRevealStatement, firstToken, lastToken, $"ensures ({revealPrefixModuleName}reveal_{opaquedFunc.Name}(); {Printer.ExprToString(ens.E)})", "ensures", $"{revealPrefixModuleName}reveal_{opaquedFunc.Name}();");
                                             DafnyVerifierClient.AddFileToChangeList(ref changeList, ensChange);
                                         }
                                     }
                                 }
                             }
 
-                            if (!hasCheckedImport) {
-                                hasCheckedImport = true;
-                                var moduleDef = resolvedFailedFunc.EnclosingClass.EnclosingModuleDefinition;
-                                var importType = DafnyVerifierClient.GetImportType(opaquedFuncModuleName, moduleDef);
-                                if (importType.Item1 == DafnyVerifierClient.ImportType.NoImport) {
-                                    Change openModuleChange = DafnyVerifierClient.CreateChange(ChangeTypeEnum.AddImport, moduleDef.BodyStartTok, moduleDef.BodyStartTok, $"{{import opened {opaquedFuncModuleName}", "", $"{{import opened {opaquedFuncModuleName}");
-                                    DafnyVerifierClient.AddFileToChangeList(ref changeList, openModuleChange);
-                                }
-                                else if (importType.Item1 == DafnyVerifierClient.ImportType.SpecifiedImport) {
-                                    Contract.Assert(importType.Item2.Exports.Count > 0);
-                                    var lastExport = importType.Item2.Exports[importType.Item2.Exports.Count - 1];
-                                    Change openModuleChange = DafnyVerifierClient.CreateChange(ChangeTypeEnum.AddImport, importType.Item2.tok, lastExport, $"import opened {opaquedFuncModuleName}", "import", $"import opened {opaquedFuncModuleName}");
-                                    DafnyVerifierClient.AddFileToChangeList(ref changeList, openModuleChange);
-                                }
-                            }
-
                             if (resolvedFailedFunc != null && resolvedFailedFunc is Function)
                             {
                                 var unresolvedFailedFunc = HoleEvaluator.GetMemberFromUnresolved(unresolvedProgram, resolvedFailedFunc.FullDafnyName) as Function;
-                                var newFuncBodyStr = $"{{reveal_{opaquedFunc.Name}();\n{Printer.ExprToString(unresolvedFailedFunc.Body)}}}";
-                                Change change = DafnyVerifierClient.CreateChange(ChangeTypeEnum.AddRevealStatement, unresolvedFailedFunc.BodyStartTok, unresolvedFailedFunc.BodyEndTok, newFuncBodyStr, "", $"reveal_{opaquedFunc.Name}();");
+                                var newFuncBodyStr = $"{{{revealPrefixModuleName}reveal_{opaquedFunc.Name}();\n{Printer.ExprToString(unresolvedFailedFunc.Body)}}}";
+                                Change change = DafnyVerifierClient.CreateChange(ChangeTypeEnum.AddRevealStatement, unresolvedFailedFunc.BodyStartTok, unresolvedFailedFunc.BodyEndTok, newFuncBodyStr, "", $"{revealPrefixModuleName}reveal_{opaquedFunc.Name}();");
                                 DafnyVerifierClient.AddFileToChangeList(ref changeList, change);
                             }
                             else if (resolvedFailedFunc != null && resolvedFailedFunc is Lemma) {
@@ -472,18 +477,18 @@ namespace Microsoft.Dafny {
                                     unresolvedFailedLemma.Attributes = unresolvedFailedLemma.Attributes.Prev;
                                     DafnyVerifierClient.AddFileToChangeList(ref changeList, change);
                                 } else if (failedProof.Line < unresolvedFailedLemma.Body.Tok.line || retries >= 2) {
-                                    var newLemmaBodyStr = $"{{reveal_{opaquedFunc.Name}();\n{Printer.StatementToString(unresolvedFailedLemma.Body)}\n}}";
-                                    Change change = DafnyVerifierClient.CreateChange(ChangeTypeEnum.AddRevealStatement, unresolvedFailedLemma.Body.Tok, unresolvedFailedLemma.BodyEndTok, newLemmaBodyStr, "", $"reveal_{opaquedFunc.Name}();");
+                                    var newLemmaBodyStr = $"{{{revealPrefixModuleName}reveal_{opaquedFunc.Name}();\n{Printer.StatementToString(unresolvedFailedLemma.Body)}\n}}";
+                                    Change change = DafnyVerifierClient.CreateChange(ChangeTypeEnum.AddRevealStatement, unresolvedFailedLemma.Body.Tok, unresolvedFailedLemma.BodyEndTok, newLemmaBodyStr, "", $"{revealPrefixModuleName}reveal_{opaquedFunc.Name}();");
                                     DafnyVerifierClient.AddFileToChangeList(ref changeList, change);
                                 } else {
                                     var changingStmt = CodeModifier.GetStatement(unresolvedFailedLemma.Body, failedProof.Line, failedProof.Column);
                                     string newStmtStr = "";
                                     if (changingStmt is VarDeclStmt) {
-                                        newStmtStr = $"reveal_{opaquedFunc.Name}();\n{Printer.StatementToString(changingStmt)}\n";
+                                        newStmtStr = $"{revealPrefixModuleName}reveal_{opaquedFunc.Name}();\n{Printer.StatementToString(changingStmt)}\n";
                                     } else {
-                                        newStmtStr = $"{{\nreveal_{opaquedFunc.Name}();\n{Printer.StatementToString(changingStmt)}\n}}";
+                                        newStmtStr = $"{{\n{revealPrefixModuleName}reveal_{opaquedFunc.Name}();\n{Printer.StatementToString(changingStmt)}\n}}";
                                     }
-                                    Change change = DafnyVerifierClient.CreateChange(ChangeTypeEnum.AddRevealStatement, CodeModifier.GetStartingToken(changingStmt), changingStmt.EndTok, newStmtStr, "", $"reveal_{opaquedFunc.Name}();");
+                                    Change change = DafnyVerifierClient.CreateChange(ChangeTypeEnum.AddRevealStatement, CodeModifier.GetStartingToken(changingStmt), changingStmt.EndTok, newStmtStr, "", $"{revealPrefixModuleName}reveal_{opaquedFunc.Name}();");
                                     DafnyVerifierClient.AddFileToChangeList(ref changeList, change);
                                 }
                             }
@@ -507,18 +512,18 @@ namespace Microsoft.Dafny {
                                     unresolvedFailedMethod.Attributes = unresolvedFailedMethod.Attributes.Prev;
                                     DafnyVerifierClient.AddFileToChangeList(ref changeList, change);
                                 } else if (failedProof.Line < unresolvedFailedMethod.Body.Tok.line || retries >= 2) {
-                                    var newMethodBodyStr = $"{{reveal_{opaquedFunc.Name}();\n{Printer.StatementToString(unresolvedFailedMethod.Body)}\n}}";
-                                    Change change = DafnyVerifierClient.CreateChange(ChangeTypeEnum.AddRevealStatement, unresolvedFailedMethod.Body.Tok, unresolvedFailedMethod.Body.EndTok, newMethodBodyStr, "", $"reveal_{opaquedFunc.Name}();");
+                                    var newMethodBodyStr = $"{{{revealPrefixModuleName}reveal_{opaquedFunc.Name}();\n{Printer.StatementToString(unresolvedFailedMethod.Body)}\n}}";
+                                    Change change = DafnyVerifierClient.CreateChange(ChangeTypeEnum.AddRevealStatement, unresolvedFailedMethod.Body.Tok, unresolvedFailedMethod.Body.EndTok, newMethodBodyStr, "", $"{revealPrefixModuleName}reveal_{opaquedFunc.Name}();");
                                     DafnyVerifierClient.AddFileToChangeList(ref changeList, change);
                                 } else {
                                     var changingStmt = CodeModifier.GetStatement(unresolvedFailedMethod.Body, failedProof.Line, failedProof.Column);
                                     string newStmtStr = "";
                                     if (changingStmt is VarDeclStmt) {
-                                        newStmtStr = $"reveal_{opaquedFunc.Name}();\n{Printer.StatementToString(changingStmt)}\n";
+                                        newStmtStr = $"{revealPrefixModuleName}reveal_{opaquedFunc.Name}();\n{Printer.StatementToString(changingStmt)}\n";
                                     } else {
-                                        newStmtStr = $"{{\nreveal_{opaquedFunc.Name}();\n{Printer.StatementToString(changingStmt)}\n}}";
+                                        newStmtStr = $"{{\n{revealPrefixModuleName}reveal_{opaquedFunc.Name}();\n{Printer.StatementToString(changingStmt)}\n}}";
                                     }
-                                    Change change = DafnyVerifierClient.CreateChange(ChangeTypeEnum.AddRevealStatement, CodeModifier.GetStartingToken(changingStmt), changingStmt.EndTok, newStmtStr, "", $"reveal_{opaquedFunc.Name}();");
+                                    Change change = DafnyVerifierClient.CreateChange(ChangeTypeEnum.AddRevealStatement, CodeModifier.GetStartingToken(changingStmt), changingStmt.EndTok, newStmtStr, "", $"{revealPrefixModuleName}reveal_{opaquedFunc.Name}();");
                                     DafnyVerifierClient.AddFileToChangeList(ref changeList, change);
                                 }
                             }
