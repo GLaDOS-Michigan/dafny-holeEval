@@ -65,6 +65,63 @@ namespace Microsoft.Dafny {
         return res;
       }
 
+      public static Change CreateChange(
+        ChangeTypeEnum changeType,
+        int startTokLine,
+        int startTokCol,
+        int endTokLine,
+        int endTokCol,
+        string filename,
+        string replacement,
+        string startString,
+        string addedString)
+      {
+        Change res = new Change();
+        res.ChangeType = changeType;
+        res.StartTokLine = startTokLine;
+        res.StartTokColumn = startTokCol;
+        res.EndTokLine = endTokLine;
+        res.EndTokColumn = endTokCol;
+        res.Replacement = replacement;
+        res.StartString = startString;
+        res.AddedString = addedString;
+        res.FileName = IncludeParser.NormalizedRemoveLastBracket(filename);
+        return res;
+      }
+
+    public static bool CombineChangeWithChangeList(ref Dictionary<string, List<Change>> changeList, Change change) {
+      if (!changeList.ContainsKey(change.FileName)) {
+        changeList[change.FileName] = new List<Change>();
+      }
+      for (int i = 0; i < changeList[change.FileName].Count; i++) {
+        var comparingChange = changeList[change.FileName][i];
+        // completely separate. all good
+        if (change.EndTokLine < comparingChange.StartTokLine) {
+          continue;
+        }
+        if (comparingChange.EndTokLine < change.StartTokLine) {
+          continue;
+        }
+        if (change.EndTokLine == comparingChange.StartTokLine && 
+            change.EndTokColumn < comparingChange.StartTokColumn) {
+          continue;
+        }
+        if (comparingChange.EndTokLine == change.StartTokLine &&
+            comparingChange.EndTokColumn < change.StartTokColumn) {
+          continue;
+        }
+        Console.WriteLine("conflict");
+      }
+      int index;
+      for (index = 0; index < changeList[change.FileName].Count; index++) {
+        if (change.StartTokLine > changeList[change.FileName][index].EndTokLine) {
+          break;
+        }
+      }
+      changeList[change.FileName].Insert(index, change);
+      return true;
+    }
+
     public static bool AddFileToChangeList(ref Dictionary<string, List<Change>> changeList, Change change) {
       if (!changeList.ContainsKey(change.FileName)) {
         changeList[change.FileName] = new List<Change>();
@@ -392,6 +449,10 @@ namespace Microsoft.Dafny {
         return expr.tok;
       } else if (expr is DatatypeValue) {
         return expr.tok;
+      } else if (expr is ThisExpr) {
+        return expr.tok;
+      } else if (expr is WildcardExpr) {
+        return expr.tok;
       } else {
         Console.WriteLine($"do not support GetFirstToken for {Printer.ExprToString(expr)} of type {expr.GetType()} returning expr.tok");
         return expr.tok;
@@ -413,6 +474,34 @@ namespace Microsoft.Dafny {
 
     public static IToken GetLastToken(Function func) {
       var body = func.Body;
+      if (body == null) {
+        IToken lastToken = func.tok;
+        foreach (var req in func.Req) {
+          var t = GetLastToken(req.E);
+          if (t.line > lastToken.line || (t.line == lastToken.line && t.col > lastToken.col)) {
+            lastToken = t;
+          }
+        }
+        foreach (var ens in func.Ens) {
+          var t = GetLastToken(ens.E);
+          if (t.line > lastToken.line || (t.line == lastToken.line && t.col > lastToken.col)) {
+            lastToken = t;
+          }
+        }
+        foreach (var read in func.Reads) {
+          var t = GetLastToken(read.E);
+          if (t.line > lastToken.line || (t.line == lastToken.line && t.col > lastToken.col)) {
+            lastToken = t;
+          }
+        }
+        foreach (var dec in func.Decreases.Expressions) {
+          var t = GetLastToken(dec);
+          if (t.line > lastToken.line || (t.line == lastToken.line && t.col > lastToken.col)) {
+            lastToken = t;
+          }
+        }
+        return lastToken;
+      }
       return GetLastToken(body);
     }
 
@@ -506,6 +595,10 @@ namespace Microsoft.Dafny {
         return oldExpr.CloseParenTok;
       } else if (expr is UnchangedExpr unchangedExpr) {
         return unchangedExpr.LastToken;
+      } else if (expr is ThisExpr) {
+        return expr.tok;
+      } else if (expr is WildcardExpr) {
+        return expr.tok;
       } else {
         Console.WriteLine($"do not support GetLastToken for {Printer.ExprToString(expr)} of type {expr.GetType()}");
         return null;

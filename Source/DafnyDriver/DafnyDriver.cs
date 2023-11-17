@@ -291,6 +291,11 @@ namespace Microsoft.Dafny {
       ProofEvaluator proofEvaluator = null;
       HoleEvaluator holeEvaluator = null;
       try {
+        if (DafnyOptions.O.CombineOpaqueResult) {
+          var opaqueCombiner = new OpaqueCombiner();
+          Task<bool> result = opaqueCombiner.Evaluate(dafnyProgram, dafnyUnresolvedProgram);
+          return result.Result ? ExitValue.SUCCESS : ExitValue.COMPILE_ERROR;
+        }
         if (DafnyOptions.O.CreateOpaqueFunc) {
           var opaqueEvaluator = new OpaqueEvaluator();
           Task<bool> result = opaqueEvaluator.Evaluate(dafnyProgram, dafnyUnresolvedProgram);

@@ -1075,6 +1075,36 @@ namespace Microsoft.Dafny {
       return null;
     }
 
+    public static MemberDecl GetMemberFromModuleDef(ModuleDefinition moduleDef, int lineNo) {
+      foreach (var topLevelDecl in moduleDef.TopLevelDecls) {
+        if (topLevelDecl is ClassDecl) {
+          var cd = topLevelDecl as ClassDecl;
+          foreach (var member in cd.Members) {
+            if (member.tok.line <= lineNo && lineNo <= member.BodyEndTok.line) {
+              return member;
+            }
+          }
+        }
+      }
+      return null;
+    }
+
+    public static MemberDecl GetMemberFromUnresolved(Program program, string filename, int lineNo) {
+      foreach (var topLevelDecl in program.DefaultModuleDef.TopLevelDecls) {
+        if (topLevelDecl.tok.filename == null) {
+          continue;
+        }
+        if (filename.EndsWith(IncludeParser.NormalizedRemoveLastBracket(topLevelDecl.tok.filename))) {
+          var lmd = topLevelDecl as LiteralModuleDecl;
+          var member = GetMemberFromModuleDef(lmd.ModuleDef, lineNo);
+          if (member != null) {
+            return member;
+          }
+        }
+      }
+      return null;
+    }
+
     public static MemberDecl GetMemberFromModuleDef(ModuleDefinition moduleDef, string funcName) {
       foreach (var topLevelDecl in moduleDef.TopLevelDecls) {
         if (topLevelDecl is ClassDecl) {

@@ -218,7 +218,7 @@ namespace Microsoft.Dafny {
             return changeList;
         }
 
-        public int GetTimelimitMultiplier(Attributes attrs) {
+        public static int GetTimelimitMultiplier(Attributes attrs) {
             if (attrs == null) {
                 return 1;
             } else {
@@ -623,6 +623,7 @@ namespace Microsoft.Dafny {
             foreach (var envId in finalEnvironments) {
                 if (DafnyOptions.O.HoleEvaluatorLogOutputs != "") {
                     var outputDir = DafnyOptions.O.HoleEvaluatorLogOutputs;
+                    File.WriteAllText($"{outputDir}/change_{envId}.txt", GetChangeListString(envId));
                     File.WriteAllText($"{outputDir}/request_{envId}.txt", GetRequestString(envId));
                     File.WriteAllText($"{outputDir}/response_{envId}.txt", GetResponseString(envId));
                 }
