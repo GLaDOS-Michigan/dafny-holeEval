@@ -370,6 +370,7 @@ namespace Microsoft.Dafny {
 
             var combiningChangeLists = new List<int>();
             for (int i = 0; i < 3; i++) {
+                Console.WriteLine($"Combining envId={sortedExecTimes[i].Item2} with execTime of ${sortedExecTimes[i].Item1}");
                 combiningChangeLists.Add(sortedExecTimes[i].Item2);
             }
             foreach (var changeListIndex in combiningChangeLists) {
@@ -395,18 +396,16 @@ namespace Microsoft.Dafny {
             }
             foreach (var memberChangeListKV in LemmaToChangeListDict) {
                 CombinedLemmaToChangeListDict[memberChangeListKV.Key] = CombineChanges(memberChangeListKV.Key, HoleEvaluator.GetMemberFromUnresolved(unresolvedProgram, memberChangeListKV.Key), memberChangeListKV.Value);
-                Console.WriteLine($"{memberChangeListKV.Key}\n{ChangeListToString(CombinedLemmaToChangeListDict[memberChangeListKV.Key])}");
-                Console.WriteLine("---------------------------------------");
             }
             var changeList = new Dictionary<string, List<Change>>();
             foreach (var fileImportsKV in AddedImportsPerFile) {
                 HashSet<string> addedImports = new HashSet<string>();
                 foreach (var import in fileImportsKV.Value) {
                     if (addedImports.Contains(import.AddedString) == false) {
-                        addedImports.Add(import.AddedString);
+                        addedImports.Add(import.AddedString.Substring(1));
                     }
                 }
-                var combinedImportStr = String.Join(' ', addedImports);
+                var combinedImportStr = $"{{{String.Join(' ', addedImports)}";
                 var combinedChange = new Change(fileImportsKV.Value[0]);
                 combinedChange.Replacement = combinedImportStr;
                 combinedChange.AddedString = combinedImportStr;
