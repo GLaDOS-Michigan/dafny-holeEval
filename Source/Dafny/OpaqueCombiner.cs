@@ -370,7 +370,7 @@ namespace Microsoft.Dafny {
 
             var combiningChangeLists = new List<int>();
             for (int i = 0; i < 3; i++) {
-                Console.WriteLine($"Combining envId={sortedExecTimes[i].Item2} with execTime of ${sortedExecTimes[i].Item1}");
+                Console.WriteLine($"Combining envId={sortedExecTimes[i].Item2} with execTime of {sortedExecTimes[i].Item1}min");
                 combiningChangeLists.Add(sortedExecTimes[i].Item2);
             }
             foreach (var changeListIndex in combiningChangeLists) {
