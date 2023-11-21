@@ -127,28 +127,11 @@ namespace Microsoft.Dafny {
             return output;
         }
 
-        public string ChangeListToString(int envId) {
-            string output = "";
-            throw new NotImplementedException();
-            // if (EnvIdToNonOpaqueFunc[envId] == null) {
-            //     output += $"envId={envId}\tno_change\n";
-            // }
-            // else {
-            //     output += $"envId={envId}\t{EnvIdToNonOpaqueFunc[envId].FullDafnyName}\n";
-            //     foreach (var changeFileKV in EnvIdToChangeList[envId].Item2) {
-            //         foreach (var change in changeFileKV.Value) {
-            //             output += $"file={changeFileKV.Key}; {change.ToString()}\n";
-            //         }
-            //     }
-            // }
-            // return output;
-        }
-
         public bool ProcessOutput(int envId) {
             var res = GetFailingProofs(envId);
             if (res.Count == 0) {
                 Console.WriteLine($"{dafnyVerifier.sw.ElapsedMilliseconds / 1000}:: found new function to make opaque\n");
-                Console.WriteLine(ChangeListToString(envId));
+                Console.WriteLine(GetChangeListString(envId));
                 return true;
             }
             return false;

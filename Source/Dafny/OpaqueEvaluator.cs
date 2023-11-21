@@ -106,6 +106,9 @@ namespace Microsoft.Dafny {
         }
 
         private string GetChangeListString(int index) {
+            if (!EnvIdToChangeList.ContainsKey(index) || EnvIdToChangeList[index] == null) {
+                return "";
+            }
             ChangeList changes = new ChangeList();
             foreach (var fileChangePair in EnvIdToChangeList[index].Item2) {
                 foreach (var change in fileChangePair.Value) {
