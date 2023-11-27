@@ -139,7 +139,8 @@ namespace Microsoft.Dafny {
       testGenOptions ??= new TestGenerationOptions();
 
     public bool CombineOpaqueResult = false;
-    public string OpaqueCombinerChangeListPath = "";
+    public bool RunChangeLists = false;
+    public string ChangeListPath = "";
     public bool CreateOpaqueFunc = false;
     public string FindHoleFromFunctionName = null;
     public string ProofEvaluatorLemmaName = null;
@@ -522,9 +523,13 @@ namespace Microsoft.Dafny {
           CombineOpaqueResult = true;
           return true;
 
-        case "opaqueCombinerChangeListPath":
+        case "runChangeLists":
+          RunChangeLists = true;
+          return true;
+
+        case "changeListPath":
           if (ps.ConfirmArgumentCount(1)) {
-            OpaqueCombinerChangeListPath = args[ps.i];
+            ChangeListPath = args[ps.i];
           }
           return true;
 

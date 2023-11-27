@@ -28,7 +28,7 @@ namespace Microsoft.Dafny {
             return Google.Protobuf.JsonFormatter.Default.Format(EnvIdToChangeList[index]);
         }
 
-        public List<double> ParseExecTimes(string path) {
+        public static  List<double> ParseExecTimes(string path) {
             List<double> res = new List<double>();
             var input = File.ReadAllLines(path);
             foreach (var line in input) {
@@ -37,7 +37,7 @@ namespace Microsoft.Dafny {
             return res;
         }
 
-        public List<ChangeList> ParseChangeProtobuf(string path) {
+        public static List<ChangeList> ParseChangeProtobuf(string path) {
             List<ChangeList> res = new List<ChangeList>();
             var input = File.ReadAllLines(path);
             foreach (var line in input) {
@@ -109,24 +109,6 @@ namespace Microsoft.Dafny {
         public Dictionary<string, ModuleDefinition> FileNameToModuleDict = new Dictionary<string, ModuleDefinition>();
         public PriorityQueue<int, UInt64> ExecutionTimeEnvIdTupleList = new PriorityQueue<int, UInt64>();
 
-        public string ChangeListToString(Dictionary<string, List<Change>> changeList) {
-            string output = "";
-            foreach (var changeFileKV in changeList) {
-                foreach (var change in changeFileKV.Value) {
-                    output += $"file={changeFileKV.Key}; {change.ToString()}\n";
-                }
-            }
-            return output;
-        }
-
-        public string ChangeListToString(List<Change> changeList) {
-            string output = "";
-            foreach (var change in changeList) {
-                output += $"{change.ToString()}\n";
-            }
-            return output;
-        }
-
         public bool ProcessOutput(int envId) {
             var res = GetFailingProofs(envId);
             if (res.Count == 0) {
@@ -135,24 +117,6 @@ namespace Microsoft.Dafny {
                 return true;
             }
             return false;
-        }
-
-        public void AddVerificationRequestPerCallable(int envId, string filename, List<string> baseArgs) {
-            foreach (var callable in ModuleDefinition.AllCallables(FileNameToModuleDict[filename].TopLevelDecls)) {
-                if (callable is Method method) {
-                    baseArgs.Add($"/proc:*{method.FullSanitizedName}");
-                    var timeLimitMultiplier = OpaqueEvaluator.GetTimelimitMultiplier(method.Attributes);
-                    dafnyVerifier.AddVerificationRequestToEnvironment(envId, "", filename, baseArgs, $"{timeLimitMultiplier}m");
-                    baseArgs.RemoveAt(baseArgs.Count - 1);
-                } else if (callable is Function func) {
-                    baseArgs.Add($"/proc:*{func.FullSanitizedName}");
-                    var timeLimitMultiplier = OpaqueEvaluator.GetTimelimitMultiplier(func.Attributes);
-                    dafnyVerifier.AddVerificationRequestToEnvironment(envId, "", filename, baseArgs, $"{timeLimitMultiplier}m");
-                    baseArgs.RemoveAt(baseArgs.Count - 1);
-                } else {
-                    Console.WriteLine(callable.ToString());
-                }
-            }
         }
 
         public List<Change> MethodCombineChanges(string methodName, Method unresolvedMethod, List<Change> changeList) {
@@ -339,8 +303,8 @@ namespace Microsoft.Dafny {
                 }
             }
 
-            var allChangeList = ParseChangeProtobuf(DafnyOptions.O.OpaqueCombinerChangeListPath);
-            var execTimes = ParseExecTimes($"{DafnyOptions.O.OpaqueCombinerChangeListPath}_execTime.txt");
+            var allChangeList = ParseChangeProtobuf(DafnyOptions.O.ChangeListPath);
+            var execTimes = ParseExecTimes($"{DafnyOptions.O.ChangeListPath}_execTime.txt");
             List<Tuple<double, int>> sortedExecTimes = new List<Tuple<double, int>>();
             for (int i = 0; i < execTimes.Count; i++) {
                 sortedExecTimes.Add(new Tuple<double, int>(execTimes[i], i));
@@ -408,6 +372,13 @@ namespace Microsoft.Dafny {
                 dafnyVerifier.AddVerificationRequestToEnvironment(combinedEnvId, "", task.Key, task.Value.Arguments.ToList());
             }
             await dafnyVerifier.RunVerificationRequestsStartingFromEnvironment(0, true);
+            if (DafnyOptions.O.HoleEvaluatorLogOutputs != "") {
+                var outputDir = DafnyOptions.O.HoleEvaluatorLogOutputs;
+                if (!Directory.Exists(outputDir))
+                {
+                    Directory.CreateDirectory(outputDir);
+                }
+            }
             foreach (var envId in finalEnvironments) {
                 if (DafnyOptions.O.HoleEvaluatorLogOutputs != "") {
                     var outputDir = DafnyOptions.O.HoleEvaluatorLogOutputs;

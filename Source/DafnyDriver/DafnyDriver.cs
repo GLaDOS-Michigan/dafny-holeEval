@@ -296,6 +296,11 @@ namespace Microsoft.Dafny {
           Task<bool> result = opaqueCombiner.Evaluate(dafnyProgram, dafnyUnresolvedProgram);
           return result.Result ? ExitValue.SUCCESS : ExitValue.COMPILE_ERROR;
         }
+        if (DafnyOptions.O.RunChangeLists) {
+          var changeListEvaluator = new ChangeListEvaluator();
+          Task<bool> result = changeListEvaluator.Evaluate(dafnyProgram, dafnyUnresolvedProgram);
+          return result.Result ? ExitValue.SUCCESS : ExitValue.COMPILE_ERROR;
+        }
         if (DafnyOptions.O.CreateOpaqueFunc) {
           var opaqueEvaluator = new OpaqueEvaluator();
           Task<bool> result = opaqueEvaluator.Evaluate(dafnyProgram, dafnyUnresolvedProgram);
