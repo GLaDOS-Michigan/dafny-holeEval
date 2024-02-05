@@ -235,18 +235,18 @@ namespace Microsoft.Dafny {
             }
         }
 
-        public void AddVerificationRequestPerCallable(int envId, string filename, List<string> baseArgs) {
-
+        public static void AddVerificationRequestPerCallable(int envId, string filename, List<string> baseArgs, DafnyVerifierClient dafnyVerifier, Dictionary<string, ModuleDefinition> FileNameToModuleDict,
+        int rlimitMultiplier = 1) {
             foreach (var callable in ModuleDefinition.AllCallables(FileNameToModuleDict[filename].TopLevelDecls)) {
                 if (callable is Method method) {
                     baseArgs.Add($"/proc:*{method.FullSanitizedName}");
-                    var timeLimitMultiplier = GetTimelimitMultiplier(method.Attributes);
-                    dafnyVerifier.AddVerificationRequestToEnvironment(envId, "", filename, baseArgs, $"{timeLimitMultiplier}m");
+                    var timeLimitMultiplier = GetTimelimitMultiplier(method.Attributes) * rlimitMultiplier;
+                    dafnyVerifier.AddVerificationRequestToEnvironment(envId, "", filename, baseArgs, $"{timeLimitMultiplier}m", rlimitMultiplier);
                     baseArgs.RemoveAt(baseArgs.Count - 1);
                 } else if (callable is Function func) {
                     baseArgs.Add($"/proc:*{func.FullSanitizedName}");
-                    var timeLimitMultiplier = GetTimelimitMultiplier(func.Attributes);
-                    dafnyVerifier.AddVerificationRequestToEnvironment(envId, "", filename, baseArgs, $"{timeLimitMultiplier}m");
+                    var timeLimitMultiplier = GetTimelimitMultiplier(func.Attributes) * rlimitMultiplier;
+                    dafnyVerifier.AddVerificationRequestToEnvironment(envId, "", filename, baseArgs, $"{timeLimitMultiplier}m", rlimitMultiplier);
                     baseArgs.RemoveAt(baseArgs.Count - 1);
                 } else {
                     Console.WriteLine(callable.ToString());
@@ -293,7 +293,7 @@ namespace Microsoft.Dafny {
                 var affectedFiles = includeParser.GetListOfAffectedFilesBy(filename).ToList();
                 affectedFiles = affectedFiles.Distinct().ToList();
                 foreach (var file in affectedFiles) {
-                    AddVerificationRequestPerCallable(envId, file, tasksListDictionary[file].Arguments.ToList());
+                    AddVerificationRequestPerCallable(envId, file, tasksListDictionary[file].Arguments.ToList(), dafnyVerifier, FileNameToModuleDict);
                     // dafnyVerifier.AddVerificationRequestToEnvironment(envId, "", file, tasksListDictionary[file].Arguments.ToList());
                 }
                 if (envId > endEnvId) {

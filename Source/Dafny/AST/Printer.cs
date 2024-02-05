@@ -2202,8 +2202,11 @@ namespace Microsoft.Dafny {
       } else if (expr is ThisExpr) {
         wr.Write("this");
 
-      } else if (expr is IdentifierExpr) {
-        var displayName = GetAppenededUnique((expr as IdentifierExpr).Name);
+      } else if (expr is IdentifierExpr identifierExpr) {
+        var displayName = GetAppenededUnique(identifierExpr.Name);
+        if (identifierExpr.Prefix != "") {
+          displayName = identifierExpr.Prefix + displayName;
+        }
         wr.Write(displayName);
 
       } else if (expr is DatatypeValue) {
@@ -2240,6 +2243,9 @@ namespace Microsoft.Dafny {
 
       } else if (expr is NameSegment) {
         var e = (NameSegment)expr;
+        if (e.Prefix != null) {
+          wr.Write(e.Prefix);
+        }
         if (e.WasResolved() && e.Resolved is DatatypeValue) {
           wr.Write(GetFullTypeString(ModuleForTypes, e.Type, new HashSet<ModuleDefinition>()));
           wr.Write(".");

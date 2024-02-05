@@ -57,7 +57,7 @@ namespace Microsoft.Dafny {
         res.StartTokLine = startTok.line;
         res.StartTokColumn = startTok.col;
         res.EndTokLine = endTok.line;
-        res.EndTokColumn = endTok.col;
+        res.EndTokColumn = endTok.col + endTok.val.Length - 1;
         res.Replacement = replacement;
         res.StartString = startString;
         res.AddedString = addedString;
@@ -305,15 +305,33 @@ namespace Microsoft.Dafny {
       return EnvironmentSetupTasks.Count - 1;
     }
 
-    public void AddVerificationRequestToEnvironment(int envId, string code, string filename, List<string> args, string timeout = "20m") {
+    public void AddVerificationRequestToEnvironment(int envId, VerificationRequest request) {
+      Contract.Assert(envId >= 0);
+      Contract.Assert(envId < EnvironmentVerificationTasks.Count);
+      EnvironmentVerificationTasks[envId].Add(request);
+    }
+
+    public void AddVerificationRequestToEnvironment(int envId, string code, string filename, List<string> args, string timeout = "20m", int rlimitMultipler = 1) {
       Contract.Assert(envId >= 0);
       Contract.Assert(envId < EnvironmentVerificationTasks.Count);
       VerificationRequest request = new VerificationRequest();
       request.Code = code;
       request.Path = filename;
       request.Timeout = timeout;
-      foreach (var arg in args) {
-        request.Arguments.Add(arg);
+      if (rlimitMultipler == 1) {
+        foreach (var arg in args) {
+          request.Arguments.Add(arg);
+        }
+      } else {
+        foreach (var arg in args) {
+          if (arg.StartsWith("/rlimit:")) {
+            int currLimit = Int32.Parse(arg.Substring(8));
+            int newLimit = currLimit * rlimitMultipler;
+            request.Arguments.Add($"/rlimit:{newLimit}");
+          } else {
+            request.Arguments.Add(arg);
+          }
+        }
       }
       EnvironmentVerificationTasks[envId].Add(request);
     }

@@ -487,7 +487,7 @@ namespace Microsoft.Dafny {
 
     public async Task<bool> EvaluateAfterRemoveFileLine(Program program, string removeFileLine, int depth, int expressionDepth) {
       var erasingLemmaName = CodeModifier.Erase(program, removeFileLine);
-      return await Evaluate(program, erasingLemmaName, depth, expressionDepth);
+      return await Evaluate(program, erasingLemmaName.Item1, depth, expressionDepth);
     }
 
     public async Task<bool> Evaluate(Program program, string lemmaName, int depth, int expressionDepth) {

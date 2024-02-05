@@ -138,6 +138,7 @@ namespace Microsoft.Dafny {
     public virtual TestGenerationOptions TestGenOptions =>
       testGenOptions ??= new TestGenerationOptions();
 
+    public bool CalculateDNF = false;
     public bool CombineOpaqueResult = false;
     public bool RunChangeLists = false;
     public string ChangeListPath = "";
@@ -517,6 +518,10 @@ namespace Microsoft.Dafny {
 
         case "extractCounterexample":
           ExtractCounterexample = true;
+          return true;
+
+        case "calculateDNF":
+          CalculateDNF = true;
           return true;
 
         case "opaqueCombiner":

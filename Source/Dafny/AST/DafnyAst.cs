@@ -5956,7 +5956,7 @@ namespace Microsoft.Dafny {
 
   public abstract class NonglobalVariable : IVariable {
     public readonly IToken tok;
-    readonly string name;
+    public string name;
 
     [ContractInvariantMethod]
     void ObjectInvariant() {
@@ -5969,6 +5969,9 @@ namespace Microsoft.Dafny {
       get {
         Contract.Ensures(Contract.Result<string>() != null);
         return name;
+      }
+      set {
+        name = value;
       }
     }
     public string DisplayName {
@@ -9993,6 +9996,7 @@ namespace Microsoft.Dafny {
       Contract.Invariant(Name != null);
     }
 
+    public string Prefix;
     public readonly string Name;
     public IVariable Var;  // filled in by resolution
 
@@ -12966,6 +12970,7 @@ namespace Microsoft.Dafny {
 
   public class NameSegment : ConcreteSyntaxExpression {
     public readonly string Name;
+    public string Prefix;
     public readonly List<Type> OptTypeArguments;
     public NameSegment(IToken tok, string name, List<Type> optTypeArguments)
       : base(tok) {
@@ -12973,6 +12978,7 @@ namespace Microsoft.Dafny {
       Contract.Requires(name != null);
       Contract.Requires(optTypeArguments == null || optTypeArguments.Count > 0);
       Name = name;
+      Prefix = "";
       OptTypeArguments = optTypeArguments;
     }
   }

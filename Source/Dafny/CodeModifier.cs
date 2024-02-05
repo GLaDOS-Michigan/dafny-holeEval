@@ -21,8 +21,9 @@ namespace Microsoft.Dafny {
   public class CodeModifier {
     public CodeModifier() { }
 
-    public static void EraseFromPredicate(Predicate predicate, int line) {
+    public static Change EraseFromPredicate(Predicate predicate, int line) {
       var exprList = Expression.Conjuncts(predicate.Body).ToList();
+      Change res = null;
       var i = -1;
       for (i = 0; i < exprList.Count; i++) {
         if (line < exprList[i].tok.line) {
@@ -33,18 +34,33 @@ namespace Microsoft.Dafny {
         exprList.RemoveAt(i - 1);
       }
       if (exprList.Count == 0) {
+        res = DafnyVerifierClient.CreateChange(ChangeTypeEnum.ChangeFunctionBody,
+          DafnyVerifierClient.GetFirstToken(predicate.Body),
+          DafnyVerifierClient.GetLastToken(predicate.Body),
+          "true",
+          "",
+          "true");
         predicate.Body = Expression.CreateBoolLiteral(predicate.tok, true);
       } else {
         var body = exprList[0];
         for (int j = 1; j < exprList.Count; j++) {
           body = Expression.CreateAnd(body, exprList[j]);
         }
+        res = DafnyVerifierClient.CreateChange(ChangeTypeEnum.ChangeFunctionBody,
+          DafnyVerifierClient.GetFirstToken(predicate.Body),
+          DafnyVerifierClient.GetLastToken(predicate.Body),
+          Printer.ExprToString(body),
+          "",
+          Printer.ExprToString(body));
         predicate.Body = body;
       }
+      return res;
     }
 
-    public static string Erase(Program program, string removeFileLine) {
-      var name = "";
+    public static Tuple<string, Change> Erase(Program program, string removeFileLine) {
+      Tuple<string, Change> res = new Tuple<string, Change>("", null);
+      var resItem1 = "";
+      Change resItem2 = null;
       var fileLineList = removeFileLine.Split(',');
       foreach (var fileLineString in fileLineList) {
         var fileLineArray = fileLineString.Split(':');
@@ -52,18 +68,19 @@ namespace Microsoft.Dafny {
         var line = Int32.Parse(fileLineArray[1]);
         if (program.ModuleSigs.Count == 0) {
           // unresolved program
-          return "";
+          return res;
         }
         foreach (var kvp in program.ModuleSigs) {
           foreach (var topLevelDecl in ModuleDefinition.AllFunctions(kvp.Value.ModuleDef.TopLevelDecls)) {
             if (Path.GetFullPath(topLevelDecl.tok.filename) == file) {
               if (topLevelDecl.BodyStartTok.line <= line && line <= topLevelDecl.BodyEndTok.line) {
                 if (topLevelDecl is Predicate) {
-                  if (name != "" && name != topLevelDecl.FullDafnyName) {
+                  if (res.Item1 != "" && res.Item1 != topLevelDecl.FullDafnyName) {
                     throw new NotSupportedException("do not support removing from two lemmas at the same time!");
                   }
-                  name = topLevelDecl.FullDafnyName;
-                  EraseFromPredicate(topLevelDecl as Predicate, line);
+                  resItem1 = topLevelDecl.FullDafnyName;
+                  resItem2 = EraseFromPredicate(topLevelDecl as Predicate, line);
+                  res = new Tuple<string, Change>(resItem1, resItem2); 
                 }
               }
             }
@@ -73,10 +90,10 @@ namespace Microsoft.Dafny {
               if (topLevelDecl.BodyStartTok.line <= line && line <= topLevelDecl.BodyEndTok.line) {
                 var stmtList = topLevelDecl.Body.Body;
                 // Console.WriteLine($"topLevelDecl : {topLevelDecl.FullDafnyName}");
-                if (name != "" && name != topLevelDecl.FullDafnyName) {
+                if (res.Item1 != "" && res.Item1 != topLevelDecl.FullDafnyName) {
                   throw new NotSupportedException("do not support removing from two lemmas at the same time!");
                 }
-                name = topLevelDecl.FullDafnyName;
+                resItem1 = topLevelDecl.FullDafnyName;
                 var i = -1;
                 for (i = 0; i < stmtList.Count; i++) {
                   if (line < stmtList[i].Tok.line) {
@@ -84,60 +101,79 @@ namespace Microsoft.Dafny {
                   }
                 }
                 i--;
-                if (i != -1 && EraseFromStatement(topLevelDecl.Body.Body[i], line)) {
+                var eraseRes = EraseFromStatement(topLevelDecl.Body.Body[i], line);
+                resItem2 = eraseRes.Item2;
+                if (i != -1 && eraseRes.Item1) {
+                  var stmtToRemove = topLevelDecl.Body.Body[i];
+                  resItem2 = DafnyVerifierClient.CreateChange(
+                    ChangeTypeEnum.ChangeFunctionBody,
+                    stmtToRemove.Tok,
+                    stmtToRemove.EndTok,
+                    "",
+                    "",
+                    "");
                   topLevelDecl.Body.Body.RemoveAt(i);
                 }
+                res = new Tuple<string, Change>(resItem1, resItem2);
               }
             }
           }
         }
       }
-      return name;
+      return res;
     }
 
     // returns true if statement should also be removed in parent
-    private static bool EraseFromStatement(Statement stmt, int line) {
+    private static Tuple<bool, Change> EraseFromStatement(Statement stmt, int line) {
       if (stmt is BlockStmt) {
-        EraseFromBlockStmt(stmt as BlockStmt, line);
-        return false;
+        return new Tuple<bool, Change>(false, EraseFromBlockStmt(stmt as BlockStmt, line));
       }
       else if (stmt is IfStmt) {
-        EraseFromIfStmt(stmt as IfStmt, line);
-        return false;
+        return new Tuple<bool, Change>(false, EraseFromIfStmt(stmt as IfStmt, line));
       }
       else if (stmt is ForallStmt) {
         return EraseFromForallStmt(stmt as ForallStmt, line);
       }
-      return true;
+      return new Tuple<bool, Change>(true, null);
     }
 
-    private static void EraseFromBlockStmt(BlockStmt blockStmt, int line) {
+    private static Change EraseFromBlockStmt(BlockStmt blockStmt, int line) {
       for(int i = 0; i < blockStmt.Body.Count; i++) {
         if (blockStmt.Body[i].Tok.line <= line && line <= blockStmt.Body[i].EndTok.line) {
-          if (EraseFromStatement(blockStmt.Body[i], line)) {
+          var EraseResult = EraseFromStatement(blockStmt.Body[i], line);
+          if (EraseResult.Item1) {
+            EraseResult = new Tuple<bool, Change>(EraseResult.Item1, 
+              DafnyVerifierClient.CreateChange(ChangeTypeEnum.ChangeFunctionBody,
+                blockStmt.Body[i].Tok,
+                blockStmt.Body[i].EndTok,
+                "", "", "")
+              );
             blockStmt.Body.RemoveAt(i);
           }
-          return;
+          return EraseResult.Item2;
         }
       }
+      return null;
     }
 
-    private static void EraseFromIfStmt(IfStmt ifStmt, int line) {
+    private static Change EraseFromIfStmt(IfStmt ifStmt, int line) {
       if (ifStmt.Thn.Tok.line <= line && line <= ifStmt.Thn.EndTok.line) {
-        EraseFromBlockStmt(ifStmt.Thn, line);
+        return EraseFromBlockStmt(ifStmt.Thn, line);
       }
       else if (ifStmt.Els != null) {
-        EraseFromStatement(ifStmt.Els, line);
+        return EraseFromStatement(ifStmt.Els, line).Item2;
+      } else {
+        return null;
       }
     }
 
-    private static bool EraseFromForallStmt(ForallStmt forallStmt, int line) {
+    private static Tuple<bool, Change> EraseFromForallStmt(ForallStmt forallStmt, int line) {
       if (line < forallStmt.Body.Tok.line) {
-        return true;
+        return new Tuple<bool, Change>(true, null);
       }
       else {
-        EraseFromStatement(forallStmt.Body, line);
-        return false;
+        var change = EraseFromStatement(forallStmt.Body, line);
+        return new Tuple<bool, Change>(false, change.Item2);
       }
     }
 

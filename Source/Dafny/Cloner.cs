@@ -403,7 +403,13 @@ namespace Microsoft.Dafny {
 
       } else if (expr is BinaryExpr) {
         var e = (BinaryExpr)expr;
-        return new BinaryExpr(Tok(e.tok), e.Op, CloneExpr(e.E0), CloneExpr(e.E1));
+        if (e.ResolvedOp_PossiblyStillUndetermined != BinaryExpr.ResolvedOpcode.YetUndetermined) {
+          var res = new BinaryExpr(Tok(e.tok), e.Op, CloneExpr(e.E0), CloneExpr(e.E1));
+          res.ResolvedOp = e.ResolvedOp;
+          return res;
+        } else {
+          return new BinaryExpr(Tok(e.tok), e.Op, CloneExpr(e.E0), CloneExpr(e.E1));
+        }
 
       } else if (expr is TernaryExpr) {
         var e = (TernaryExpr)expr;

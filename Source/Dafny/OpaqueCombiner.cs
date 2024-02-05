@@ -271,7 +271,7 @@ namespace Microsoft.Dafny {
             }
         }
 
-        public ChangeList ConvertToProtoChangeList(Dictionary<string, List<Change>> changeListPerFile) {
+        public static ChangeList ConvertToProtoChangeList(Dictionary<string, List<Change>> changeListPerFile) {
             var changeList = new ChangeList();
             foreach (var cPerFile in changeListPerFile) {
                 foreach (var c in cPerFile.Value) {

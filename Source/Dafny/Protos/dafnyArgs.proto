@@ -20,6 +20,8 @@ enum ChangeTypeEnum {
   AddRevealStatement = 1;
   AddFuelAttribute = 2;
   AddImport = 3;
+  MakeFalseFunction = 4;
+  ChangeFunctionBody = 5;
 }
 
 message Change {

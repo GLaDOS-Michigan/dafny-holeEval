@@ -671,7 +671,7 @@ namespace Microsoft.Dafny {
 
     public async Task<bool> EvaluateAfterRemoveFileLine(Program program, Program unresolvedProgram, string removeFileLine, string baseFuncName, int depth) {
       var funcName = CodeModifier.Erase(program, removeFileLine);
-      return await Evaluate(program, unresolvedProgram, funcName, baseFuncName, depth);
+      return await Evaluate(program, unresolvedProgram, funcName.Item1, baseFuncName, depth);
     }
 
     public async Task<bool> Evaluate(Program program, Program unresolvedProgram, string funcName, string baseFuncName, int depth) {
