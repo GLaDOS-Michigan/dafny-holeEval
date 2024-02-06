@@ -296,6 +296,11 @@ namespace Microsoft.Dafny {
           Task<bool> result = opaqueCombiner.Evaluate(dafnyProgram, dafnyUnresolvedProgram);
           return result.Result ? ExitValue.SUCCESS : ExitValue.COMPILE_ERROR;
         }
+        if (DafnyOptions.O.CalculateDNF) {
+          var dnfCalculator = new DNFCalculator();
+          Task<bool> result = dnfCalculator.Evaluate(dafnyProgram, dafnyUnresolvedProgram);
+          return result.Result ? ExitValue.SUCCESS : ExitValue.COMPILE_ERROR;
+        }
         if (DafnyOptions.O.RunChangeLists) {
           var changeListEvaluator = new ChangeListEvaluator();
           Task<bool> result = changeListEvaluator.Evaluate(dafnyProgram, dafnyUnresolvedProgram);
@@ -311,6 +316,7 @@ namespace Microsoft.Dafny {
           Task<Function> holeFunc = null;
           if (DafnyOptions.O.HoleEvaluatorRemoveFileLine != null) {
             holeFunc = holeFinder.FindHoleAfterRemoveFileLine(dafnyProgram,
+                dafnyUnresolvedProgram,
                 DafnyOptions.O.HoleEvaluatorRemoveFileLine,
                 DafnyOptions.O.FindHoleFromFunctionName);
           } else {
