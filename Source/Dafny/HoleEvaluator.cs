@@ -27,7 +27,10 @@ namespace Microsoft.Dafny {
     InvalidExpr = 5,
     NoMatchingTrigger = 6,
     NotRunningDueToAlreadyCorrectCode = 7,
-    CorrectProofWithoutMaintainGuarantee = 8
+    CorrectProofWithoutMaintainGuarantee = 8,
+    InconclusiveProof = 9,
+    ProvedFalse = 10,
+    UnableToProveFalse = 11
   }
   public class HoleEvaluator {
     private string UnderscoreStr = "";
@@ -152,7 +155,7 @@ namespace Microsoft.Dafny {
         } else {
           res = DafnyVerifierClient.IsCorrectOutputForNoErrors(response);
         }
-        if (res != Result.IncorrectProof) {
+        if (res != Result.IncorrectProof && res != Result.InconclusiveProof) {
           // correctExpressions.Add(dafnyMainExecutor.processToExpr[p]);
           // Console.WriteLine(output);
           combinationResults[index] = res;

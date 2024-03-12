@@ -67,6 +67,26 @@ namespace Microsoft.Dafny {
 
   }
 
+  public class CallGraph<U> {
+    public Dictionary<U, HashSet<U>> AdjacencyList { get; } = new Dictionary<U, HashSet<U>>();
+    public Dictionary<U, string> Labels = new Dictionary<U, string>();
+
+    public CallGraph() { }
+
+    public void AddVertex(U vertex, string str = "") {
+      if (!AdjacencyList.ContainsKey(vertex)) {
+        AdjacencyList[vertex] = new HashSet<U>();
+        Labels[vertex] = str;
+      }
+    }
+
+    public void AddEdge(U source, U destination) {
+      if (AdjacencyList.ContainsKey(source) && AdjacencyList.ContainsKey(destination)) {
+        AdjacencyList[source].Add(destination);
+      }
+    }
+  }
+
   public class DirectedCallGraph<U, V, W> {
     public Dictionary<U, HashSet<Tuple<U, V, W>>> AdjacencyWeightList { get; } = new Dictionary<U, HashSet<Tuple<U, V, W>>>();
 

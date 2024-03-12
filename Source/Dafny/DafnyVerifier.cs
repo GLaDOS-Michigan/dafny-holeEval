@@ -378,6 +378,16 @@ namespace Microsoft.Dafny {
       return targetFolder;
     }
 
+    public static Result IsCorrectOutputForValidityCheck(string output) {
+      if (output.EndsWith(" 0 errors\n")) {
+        return Result.ProvedFalse;
+      } else if (output.EndsWith("inconclusive\n")) {
+        return Result.InconclusiveProof;
+      } else {
+        return Result.UnableToProveFalse;
+      }
+    }
+
     public static Result IsCorrectOutputForValidityCheck(string output, string expectedOutput, string expectedInconclusiveOutputStart) {
       if (output.EndsWith("1 error\n")) {
         var outputList = output.Split('\n');
@@ -398,8 +408,10 @@ namespace Microsoft.Dafny {
     public static Result IsCorrectOutputForNoErrors(string output) {
       if (output.EndsWith(" 0 errors\n")) {
         return Result.CorrectProof;
-      } else {
+      } else if (output.EndsWith("1 error\n")) {
         return Result.IncorrectProof;
+      } else {
+        return Result.InconclusiveProof;
       }
     }
 

@@ -249,7 +249,7 @@ namespace Microsoft.Dafny {
                     dafnyVerifier.AddVerificationRequestToEnvironment(envId, "", filename, baseArgs, $"{timeLimitMultiplier}m", rlimitMultiplier);
                     baseArgs.RemoveAt(baseArgs.Count - 1);
                 } else {
-                    Console.WriteLine(callable.ToString());
+                    throw new NotSupportedException($"Do not support adding verification requests for {callable.ToString()}");
                 }
             }
         }
