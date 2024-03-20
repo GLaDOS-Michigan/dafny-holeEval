@@ -33,7 +33,36 @@ namespace Microsoft.Dafny {
         public Dictionary<string, int> FailedVerificationCount = new Dictionary<string, int>();
         public Dictionary<string, int> TimeoutVerificationCount = new Dictionary<string, int>();
 
+        private Change baseChange = null;
+        public Dictionary<string, List<Change>> GetBaseChangeList() {
+            Dictionary<string, List<Change>> res = new Dictionary<string, List<Change>>();
+            if (baseChange != null) {
+                res[baseChange.FileName] = new List<Change>();
+                res[baseChange.FileName].Add(baseChange);
+            }
+            return res;
+        }
+
         public DNFCalculator() {
+        }
+
+        public void AppendPrefix(string prefix, Statement stmt) {
+            if (prefix == "" || stmt == null) {
+                return;
+            } else if (stmt is UpdateStmt updateStmt) {
+                foreach (var lhs in updateStmt.Lhss) {
+                    AppendPrefix(prefix, lhs);
+                }
+                foreach (var rhs in updateStmt.Rhss) {
+                    if (rhs is ExprRhs exprRhs) {
+                        AppendPrefix(prefix, exprRhs.Expr);
+                    } else {
+                        throw new NotSupportedException($"do not support AppendPrefix for {Printer.StatementToString(stmt)} with type {rhs.GetType()}");
+                    }
+                }
+            } else {
+                throw new NotSupportedException($"do not support AppendPrefix for {Printer.StatementToString(stmt)} with type {stmt.GetType()}");
+            }
         }
 
         public void AppendPrefix(string prefix, Expression expr) {
@@ -72,6 +101,8 @@ namespace Microsoft.Dafny {
                 foreach (var e in multiSetDisplayExpr.Elements) {
                     AppendPrefix(prefix, e);
                 }
+            } else if (expr is MultiSetFormingExpr multiSetFormingExpr) {
+                AppendPrefix(prefix, multiSetFormingExpr.E);
             } else if (expr is MapDisplayExpr mapDisplayExpr) {
                 foreach (var e in mapDisplayExpr.Elements) {
                     AppendPrefix(prefix, e.A);
@@ -102,10 +133,30 @@ namespace Microsoft.Dafny {
                 AppendPrefix(prefix, seqUpdateExpr.Index);
                 AppendPrefix(prefix, seqUpdateExpr.Value);
             } else if (expr is LetExpr letExpr) {
+                foreach (var cp in letExpr.LHSs) {
+                    if (cp.Arguments != null) {
+                        foreach (var bvar in cp.Arguments) {
+                            if (!bvar.Var.Name.StartsWith(prefix)) {
+                                bvar.Var.Name = prefix + bvar.Var.Name;
+                            }
+                        }
+                    }
+                    if (!cp.Var.Name.StartsWith(prefix)) {
+                        cp.Var.Name = prefix + cp.Var.Name;
+                    }
+                }
                 foreach (var rhs in letExpr.RHSs) {
                     AppendPrefix(prefix, rhs);
                 }
                 AppendPrefix(prefix, letExpr.Body);
+            } else if (expr is DatatypeUpdateExpr datatypeUpdateExpr) {
+                AppendPrefix(prefix, datatypeUpdateExpr.Root);
+                foreach (var update in datatypeUpdateExpr.Updates) {
+                    AppendPrefix(prefix, update.Item3);
+                }
+            } else if (expr is StmtExpr stmtExpr) {
+                AppendPrefix(prefix, stmtExpr.S);
+                AppendPrefix(prefix, stmtExpr.E);
             } else {
                 throw new NotSupportedException($"do not support appending prefix to {expr.GetType()} for {Printer.ExprToString(expr)}");
                 // return;
@@ -135,6 +186,11 @@ namespace Microsoft.Dafny {
                     FuncCallChainCalculator.FunctionCallNode node = new FuncCallChainCalculator.FunctionCallNode(func);
                     AppendPrefix(funcNamePrefix, expr);
                     yield return new Tuple<Expression, FuncCallChainCalculator.FunctionCallNode>(expr, node);
+                }
+            }
+            else if (expr is ParensExpression parensExpression) {
+                foreach (var e in GetDisjunctiveNormalForm(parensExpression.E, funcNamePrefix, func)) {
+                    yield return new Tuple<Expression, FuncCallChainCalculator.FunctionCallNode>(new ParensExpression(parensExpression.tok, parensExpression.CloseParenthesisTok, e.Item1), e.Item2);
                 }
             }
             else if (expr is NestedMatchExpr nestedMatchExpr) {
@@ -219,10 +275,14 @@ namespace Microsoft.Dafny {
                 clonedExpr.Type = iteExpr.Test.Type;
                 var notTestExpr = Expression.CreateNot(iteExpr.Test.tok, clonedExpr);
                 foreach (var x in GetDisjunctiveNormalForm(iteExpr.Thn, funcNamePrefix, func)) {
-                    yield return new Tuple<Expression, FuncCallChainCalculator.FunctionCallNode>(Expression.CreateAnd(testExpr, x.Item1), x.Item2);
+                    yield return new Tuple<Expression, FuncCallChainCalculator.FunctionCallNode>(Expression.CreateAnd(testExpr, 
+                    new ParensExpression(x.Item1.tok, x.Item1.tok, x.Item1)
+                    ), x.Item2);
                 }
                 foreach (var x in GetDisjunctiveNormalForm(iteExpr.Els, funcNamePrefix, func)) {
-                    yield return new Tuple<Expression, FuncCallChainCalculator.FunctionCallNode>(Expression.CreateAnd(notTestExpr, x.Item1), x.Item2);
+                    yield return new Tuple<Expression, FuncCallChainCalculator.FunctionCallNode>(Expression.CreateAnd(notTestExpr, 
+                    new ParensExpression(x.Item1.tok, x.Item1.tok, x.Item1)
+                    ), x.Item2);
                 }
             }
             else if (expr is LetExpr letExpr) {
@@ -275,6 +335,32 @@ namespace Microsoft.Dafny {
                     node.CalleeList.Add(DNFList[0].Item2);
                     // AppendPrefix(funcNamePrefix, expr);
                     yield return new Tuple<Expression, FuncCallChainCalculator.FunctionCallNode>(expr, node);
+                }
+            } 
+            else if (expr is ForallExpr forallExpr) {
+                foreach (var x in GetDisjunctiveNormalForm(forallExpr.Term, funcNamePrefix, func)) {
+                    foreach (var bvar in forallExpr.BoundVars) {
+                        if (!bvar.Name.StartsWith(funcNamePrefix)) {
+                            bvar.Name = funcNamePrefix + bvar.Name;
+                        }
+                    }
+                    AppendPrefix(funcNamePrefix, forallExpr.Range);
+                    yield return new Tuple<Expression, FuncCallChainCalculator.FunctionCallNode>(
+                        new ForallExpr(forallExpr.tok, forallExpr.BodyEndTok, forallExpr.TypeArgs, forallExpr.BoundVars, forallExpr.Range, x.Item1, forallExpr.Attributes),
+                        x.Item2);
+                }
+            }
+            else if (expr is ExistsExpr existsExpr) {
+                foreach (var x in GetDisjunctiveNormalForm(existsExpr.Term, funcNamePrefix, func)) {
+                    foreach (var bvar in existsExpr.BoundVars) {
+                        if (!bvar.Name.StartsWith(funcNamePrefix)) {
+                            bvar.Name = funcNamePrefix + bvar.Name;
+                        }
+                    }
+                    AppendPrefix(funcNamePrefix, existsExpr.Range);
+                    yield return new Tuple<Expression, FuncCallChainCalculator.FunctionCallNode>(
+                        new ExistsExpr(existsExpr.tok, existsExpr.BodyEndTok, existsExpr.TypeArgs, existsExpr.BoundVars, existsExpr.Range, x.Item1, existsExpr.Attributes),
+                        x.Item2);
                 }
             }
             else {
@@ -657,6 +743,23 @@ namespace Microsoft.Dafny {
             return graphVizOutput;
         }
 
+        public async Task<bool> EvaluateAfterRemoveFileLine(
+                Program program,
+                Program unresolvedProgram,
+                string removeFileLine,
+                string removePredicateName)
+        {
+            var unresolvedFunc = HoleEvaluator.GetMemberFromUnresolved(unresolvedProgram, removePredicateName) as Function;
+            var fileLineArray = removeFileLine.Split(':');
+            var file = fileLineArray[0];
+            var line = Int32.Parse(fileLineArray[1]);
+            baseChange = CodeModifier.EraseFromPredicate(unresolvedFunc as Predicate, line);
+            Console.WriteLine(Google.Protobuf.JsonFormatter.Default.Format(baseChange));
+            // var funcNameChangeTuple = CodeModifier.Erase(program, removeFileLine);
+            // baseChange = funcNameChangeTuple.Item2;
+            return await Evaluate(program, unresolvedProgram);
+        }
+
         public async Task<bool> Evaluate(Program program, Program unresolvedProgram) {
             if (DafnyOptions.O.HoleEvaluatorSpecifiedFunc == "") {
                 Console.WriteLine("no function specified to calculate the DNF for");
@@ -693,7 +796,7 @@ namespace Microsoft.Dafny {
                 var flattenChain = FlattenChain(exprCallChainTuple.Item2, 0, "");
                 Console.WriteLine(String.Join('\n', flattenChain));
                 var expr = exprCallChainTuple.Item1;
-                var changeList = new Dictionary<string, List<Change>>();
+                var changeList = GetBaseChangeList();
                 var vacuityLemmaStr = GetVacuityLemma(member);
                 // var newFuncBodyStr = $"{{\n\t({Printer.ExprToString(expr)})\n  && {Printer.ExprToString((unresolvedMember as Function).Body)}}}";
                 var newFuncBodyStr = $"{{ ({Printer.ExprToString(expr)}) }}\n\n{vacuityLemmaStr}";
@@ -747,7 +850,11 @@ namespace Microsoft.Dafny {
             //     Console.WriteLine($"\tFailed:\t{FailedVerificationCount[f]}");
             //     Console.WriteLine($"\tTimeouts:\t{TimeoutVerificationCount[f]}\n");
             // }
-            Console.WriteLine(ConvertDNFGraphToGraphviz(rootDNFnode));
+            var DNFGraphGraphviz = ConvertDNFGraphToGraphviz(rootDNFnode);
+            if (DafnyOptions.O.LogDotGraph != "") {
+                File.WriteAllText(DafnyOptions.O.LogDotGraph, DNFGraphGraphviz);
+            }
+            Console.WriteLine(DNFGraphGraphviz);
 
             if (DafnyOptions.O.HoleEvaluatorLogOutputs != "") {
                 try {

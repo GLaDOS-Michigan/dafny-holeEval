@@ -160,12 +160,15 @@ namespace Microsoft.Dafny {
     public string HoleEvaluatorConstraint = null;
     public string HoleEvaluatorRemoveFileLine = null;
     public string ProofEvaluatorRemoveFileLine = null;
+    public string CalculateDNFRemoveFileLine = null;
+    public string CalculateDNFRemovePredicateName = null;
     public int ProofEvaluatorInsertionPoint = -1;
     public string HoleEvaluatorCommands = null;
     public string HoleEvaluatorSpecifiedFunc = "";
     public bool HoleEvaluatorIncludeFunctionInvocations = false;
     public string ProofEvaluatorExcludeDir = null;
     public string HoleEvaluatorLogOutputs = "";
+    public string LogDotGraph = "";
 
     protected override bool ParseOption(string name, Bpl.CommandLineOptionEngine.CommandLineParseState ps) {
       var args = ps.args; // convenient synonym
@@ -622,6 +625,18 @@ namespace Microsoft.Dafny {
           }
           return true;
 
+        case "calculateDNFRemoveFileLine":
+          if (ps.ConfirmArgumentCount(1)) {
+            CalculateDNFRemoveFileLine = args[ps.i];
+          }
+          return true;
+
+        case "calculateDNFRemovePredicateName":
+          if (ps.ConfirmArgumentCount(1)) {
+            CalculateDNFRemovePredicateName = args[ps.i];
+          }
+          return true;
+
         case "holeEvalDumpOutput":
           HoleEvaluatorDumpOutput = true;
           return true;
@@ -668,6 +683,12 @@ namespace Microsoft.Dafny {
         case "holeEvalLogOutputs":
           if (ps.ConfirmArgumentCount(1)) {
             HoleEvaluatorLogOutputs = args[ps.i];
+          }
+          return true;
+
+        case "logDotGraph":
+          if (ps.ConfirmArgumentCount(1)) {
+            LogDotGraph = args[ps.i];
           }
           return true;
 

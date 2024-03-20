@@ -21,6 +21,42 @@ namespace Microsoft.Dafny {
   public class CodeModifier {
     public CodeModifier() { }
 
+    public static Expression EraseFromExpression(Expression expr, int line) {
+      if (expr is ITEExpr iteExpr)
+      {
+        var thnLastTok = DafnyVerifierClient.GetLastToken(iteExpr.Thn);
+        if (line <= thnLastTok.line)
+        {
+          var newThnExpr = EraseFromExpression(iteExpr.Thn, line);
+          return new ITEExpr(iteExpr.tok, iteExpr.IsBindingGuard, iteExpr.Test, newThnExpr, iteExpr.Els);
+        }
+        else
+        {
+          var newElsExpr = EraseFromExpression(iteExpr.Els, line);
+          return new ITEExpr(iteExpr.tok, iteExpr.IsBindingGuard, iteExpr.Test, iteExpr.Thn, newElsExpr);
+        }
+      } else if (expr is BinaryExpr binaryExpr) {
+        var exprList = Expression.Conjuncts(binaryExpr).ToList();
+        int idx = -1;
+        for (idx = 0; idx < exprList.Count; idx++) {
+          if (line < exprList[idx].tok.line) {
+            break;
+          }
+        }
+        exprList.RemoveAt(idx - 1);
+        var newExpr = exprList[0];
+        for (int j = 1; j < exprList.Count; j++) {
+          newExpr = Expression.CreateAnd(newExpr, exprList[j]);
+        }
+        return newExpr;
+      } else if (expr is LetExpr letExpr) {
+        var newBodyExpr = EraseFromExpression(letExpr.Body, line);
+        return new LetExpr(letExpr.tok, letExpr.LHSs, letExpr.RHSs, newBodyExpr, letExpr.Exact, letExpr.Attributes);
+      } else {
+        throw new NotSupportedException($"not supported removing from {Printer.ExprToString(expr)} with type {expr.GetType()}");
+      }
+    }
+
     public static Change EraseFromPredicate(Predicate predicate, int line) {
       var exprList = Expression.Conjuncts(predicate.Body).ToList();
       Change res = null;
@@ -31,7 +67,12 @@ namespace Microsoft.Dafny {
         }
       }
       if (i != 0) {
-        exprList.RemoveAt(i - 1);
+        if (exprList[i - 1] is ITEExpr iteExpr) {
+          exprList.RemoveAt(i - 1);
+          exprList.Insert(i - 1, EraseFromExpression(iteExpr, line));
+        } else {
+          exprList.RemoveAt(i - 1);
+        }
       }
       if (exprList.Count == 0) {
         res = DafnyVerifierClient.CreateChange(ChangeTypeEnum.ChangeFunctionBody,

@@ -290,6 +290,7 @@ namespace Microsoft.Dafny {
       Dafny.Main.Parse(dafnyFiles, programName, reporter, out var dafnyUnresolvedProgram);
       ProofEvaluator proofEvaluator = null;
       HoleEvaluator holeEvaluator = null;
+      DNFCalculator dnfCalculator = null;
       try {
         if (DafnyOptions.O.CombineOpaqueResult) {
           var opaqueCombiner = new OpaqueCombiner();
@@ -297,8 +298,16 @@ namespace Microsoft.Dafny {
           return result.Result ? ExitValue.SUCCESS : ExitValue.COMPILE_ERROR;
         }
         if (DafnyOptions.O.CalculateDNF) {
-          var dnfCalculator = new DNFCalculator();
+          dnfCalculator = new DNFCalculator();
           Task<bool> result = dnfCalculator.Evaluate(dafnyProgram, dafnyUnresolvedProgram);
+          return result.Result ? ExitValue.SUCCESS : ExitValue.COMPILE_ERROR;
+        }
+        if (DafnyOptions.O.CalculateDNFRemoveFileLine != null) {
+          dnfCalculator = new DNFCalculator();
+          Task<bool> result = dnfCalculator.EvaluateAfterRemoveFileLine(dafnyProgram,
+              dafnyUnresolvedProgram,
+              DafnyOptions.O.CalculateDNFRemoveFileLine,
+              DafnyOptions.O.CalculateDNFRemovePredicateName);
           return result.Result ? ExitValue.SUCCESS : ExitValue.COMPILE_ERROR;
         }
         if (DafnyOptions.O.RunChangeLists) {
