@@ -109,6 +109,11 @@ namespace Microsoft.Dafny {
                 }
             }
             else if (expr is ApplySuffix applySuffix) {
+                if (!(applySuffix.Lhs.Resolved is MemberSelectExpr)) {
+                    FunctionCallNode res = new FunctionCallNode(func);
+                    yield return res;
+                    yield break;
+                }
                 var callee = (applySuffix.Lhs.Resolved as MemberSelectExpr).Member as Function;
                 foreach (var f in GetFunctionCallNode(callee, callee.Body)) {
                     var res = new FunctionCallNode(func);

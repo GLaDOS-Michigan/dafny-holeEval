@@ -12534,14 +12534,16 @@ namespace Microsoft.Dafny {
     public readonly List<NestedMatchCaseExpr> Cases;
     public readonly bool UsesOptionalBraces;
     public Attributes Attributes;
+    public IToken CloseBracketToken;
 
-    public NestedMatchExpr(IToken tok, Expression source, [Captured] List<NestedMatchCaseExpr> cases, bool usesOptionalBraces, Attributes attrs = null) : base(tok) {
+    public NestedMatchExpr(IToken tok, IToken closeBracketTok, Expression source, [Captured] List<NestedMatchCaseExpr> cases, bool usesOptionalBraces, Attributes attrs = null) : base(tok) {
       Contract.Requires(source != null);
       Contract.Requires(cce.NonNullElements(cases));
       this.Source = source;
       this.Cases = cases;
       this.UsesOptionalBraces = usesOptionalBraces;
       this.Attributes = attrs;
+      this.CloseBracketToken = closeBracketTok;
     }
   }
 

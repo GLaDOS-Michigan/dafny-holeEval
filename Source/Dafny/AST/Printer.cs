@@ -2976,7 +2976,8 @@ namespace Microsoft.Dafny {
       if (v != null) {
         wr.Write(GetAppenededUnique(v.DisplayName));
         if (v.OptionalType is NonProxyType || DafnyOptions.O.DafnyPrintResolvedFile != null) {
-          PrintType(": ", v.OptionalType);
+          if (v.OptionalType.TypeArgs.Count == 0)
+            PrintType(": ", v.OptionalType);
         }
       } else {
         if (pat.Id.StartsWith(BuiltIns.TupleTypeCtorNamePrefix)) {

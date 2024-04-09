@@ -87,12 +87,20 @@ namespace Microsoft.Dafny {
         for (int j = 1; j < exprList.Count; j++) {
           body = Expression.CreateAnd(body, exprList[j]);
         }
+        var bodyString = "";
+        using (var wr = new System.IO.StringWriter()) {
+          var pr = new Printer(wr);
+          pr.UniqueStringBeforeUnderscore = HoleEvaluator.RandomString(8);
+          pr.PrintExpression(body, false);
+          bodyString = wr.ToString();
+        }
+
         res = DafnyVerifierClient.CreateChange(ChangeTypeEnum.ChangeFunctionBody,
           DafnyVerifierClient.GetFirstToken(predicate.Body),
           DafnyVerifierClient.GetLastToken(predicate.Body),
-          Printer.ExprToString(body),
+          bodyString,
           "",
-          Printer.ExprToString(body));
+          bodyString);
         predicate.Body = body;
       }
       return res;

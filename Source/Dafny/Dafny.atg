@@ -4187,7 +4187,7 @@ MatchExpression<out Expression e, bool allowLemma, bool allowLambda, bool allowB
           CaseExpression<out c, allowLemma, allowLambda, allowBitwiseOps> (. cases.Add(c); .)
         }
   )
-  (. e = new NestedMatchExpr(x, e, cases, usesOptionalBraces); .)
+  (. e = new NestedMatchExpr(x, t, e, cases, usesOptionalBraces); .)
 .
 
 /*------------------------------------------------------------------------*/

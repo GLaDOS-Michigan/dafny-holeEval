@@ -579,8 +579,8 @@ namespace Microsoft.Dafny {
         // FIXME:: assuming '}' does not exist, and last token is in the last case
         return GetLastToken(matchExpr.Cases[matchExpr.Cases.Count - 1].Body);
       } else if (expr is NestedMatchExpr nestedMatchExpr) {
-        // FIXME:: assuming '}' does not exist, and last token is in the last case
-        return GetLastToken(nestedMatchExpr.Cases[nestedMatchExpr.Cases.Count - 1].Body);
+        return nestedMatchExpr.CloseBracketToken;
+        // return GetLastToken(nestedMatchExpr.Cases[nestedMatchExpr.Cases.Count - 1].Body);
       } else if (expr is IdentifierExpr) {
         return expr.tok;
       } else if (expr is UnaryExpr unaryExpr) {

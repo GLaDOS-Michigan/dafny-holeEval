@@ -474,7 +474,7 @@ namespace Microsoft.Dafny {
         return CloneExpr(e.E);  // skip the parentheses in the clone
       } else if (expr is NestedMatchExpr) {
         var e = (NestedMatchExpr)expr;
-        return new NestedMatchExpr(Tok(e.tok), CloneExpr(e.Source), e.Cases.ConvertAll(CloneNestedMatchCaseExpr), e.UsesOptionalBraces);
+        return new NestedMatchExpr(Tok(e.tok), Tok(e.CloseBracketToken), CloneExpr(e.Source), e.Cases.ConvertAll(CloneNestedMatchCaseExpr), e.UsesOptionalBraces);
 
       } else if (expr is MatchExpr) {
         var e = (MatchExpr)expr;
