@@ -47,7 +47,7 @@ namespace Microsoft.Dafny {
         public DNFCalculator() {
         }
 
-        public void AppendPrefix(string prefix, Statement stmt) {
+        public static void AppendPrefix(string prefix, Statement stmt) {
             if (prefix == "" || stmt == null) {
                 return;
             } else if (stmt is UpdateStmt updateStmt) {
@@ -66,7 +66,7 @@ namespace Microsoft.Dafny {
             }
         }
 
-        public void AppendPrefix(string prefix, Expression expr) {
+        public static void AppendPrefix(string prefix, Expression expr) {
             if (prefix == "" || expr == null) {
                 return;
             } else if (expr is BinaryExpr binaryExpr) {
@@ -176,7 +176,7 @@ namespace Microsoft.Dafny {
             }
         }
 
-        public IEnumerable<Tuple<Expression, FuncCallChainCalculator.FunctionCallNode>>
+        public static IEnumerable<Tuple<Expression, FuncCallChainCalculator.FunctionCallNode>>
                 GetDisjunctiveNormalForm(Expression expr, string funcNamePrefix, Function func, HashSet<string> seenFunctions) {
             if (expr is BinaryExpr binaryExpr) {
                 if (binaryExpr.Op == BinaryExpr.Opcode.And) {
@@ -231,7 +231,7 @@ namespace Microsoft.Dafny {
                             //         }
                             //     }
                             // } else {
-                            var source = cloner.CloneExpr(matchExpr.Source);
+                            var source = (new Cloner()).CloneExpr(matchExpr.Source);
                             AppendPrefix(funcNamePrefix, source);
                             var cond = new ExprDotName(matchExpr.Source.tok, source, c.Ctor.tok.val + "?", null);
                             Dictionary<string, int> caseArguments = new Dictionary<string, int>();
@@ -348,7 +348,7 @@ namespace Microsoft.Dafny {
                 {
                     LHSs.Add(new CasePattern<BoundVar>(callee.Formals[i].tok, new BoundVar(callee.Formals[i].tok, callee.Name + "_" + callee.Formals[i].Name, callee.Formals[i].Type)));
                     actualBindings.Add(new ActualBinding(null, new NameSegment(callee.Formals[i].tok, funcNamePrefix + callee.Formals[i].Name, null)));
-                    var suffixArg = cloner.CloneExpr(applySuffix.Args[i]);
+                    var suffixArg = (new Cloner()).CloneExpr(applySuffix.Args[i]);
                     AppendPrefix(funcNamePrefix, suffixArg);
                     RHSs.Add(suffixArg);
                 }
@@ -406,7 +406,7 @@ namespace Microsoft.Dafny {
             yield break;
         }
 
-        public IEnumerable<Tuple<Expression, FuncCallChainCalculator.FunctionCallNode>>
+        public static IEnumerable<Tuple<Expression, FuncCallChainCalculator.FunctionCallNode>>
                 GetDisjunctiveNormalForm(MemberDecl member) {
             if (member is Function func) {
                 var seenFunctions = new HashSet<string>();
@@ -524,7 +524,7 @@ namespace Microsoft.Dafny {
             return split;
         }
 
-        public CallGraph<string> GetCallGraph(Function func) {
+        public static CallGraph<string> GetCallGraph(Function func) {
             Queue<FuncCallChainCalculator.FunctionCallNode> Q = new Queue<FuncCallChainCalculator.FunctionCallNode>();
             CallGraph<string> graph = new CallGraph<string>();
             foreach (var chain in FuncCallChainCalculator.GetFunctionCallNode(func, func.Body)) {
@@ -702,7 +702,7 @@ namespace Microsoft.Dafny {
             }
         }
 
-        public string GetVacuityLemma(MemberDecl member) {
+        public static string GetVacuityLemma(MemberDecl member) {
             var res = $"lemma {member.Name}VacuityLemma (";
             if (member is Function func) {
                 var sep = "";

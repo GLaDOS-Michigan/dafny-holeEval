@@ -290,6 +290,7 @@ namespace Microsoft.Dafny {
       Dafny.Main.Parse(dafnyFiles, programName, reporter, out var dafnyUnresolvedProgram);
       ProofEvaluator proofEvaluator = null;
       HoleEvaluator holeEvaluator = null;
+      HoleInvEval holeInvEval = null;
       DNFCalculator dnfCalculator = null;
       try {
         if (DafnyOptions.O.CombineOpaqueResult) {
@@ -356,8 +357,8 @@ namespace Microsoft.Dafny {
           return foundDesiredLemma.Result ? ExitValue.SUCCESS : ExitValue.COMPILE_ERROR;
         }
         if (DafnyOptions.O.HoleEvaluatorFunctionName != null) {
-          holeEvaluator = new HoleEvaluator();
-          var foundDesiredFunction = holeEvaluator.Evaluate(dafnyProgram,
+          holeInvEval = new HoleInvEval();
+          var foundDesiredFunction = holeInvEval.Evaluate(dafnyProgram,
               dafnyUnresolvedProgram,
               DafnyOptions.O.HoleEvaluatorFunctionName,
               DafnyOptions.O.HoleEvaluatorBaseFunctionName,
