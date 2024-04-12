@@ -8,6 +8,7 @@
 using System;
 using System.Text;
 using System.IO;
+using System.Numerics;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics.Contracts;
@@ -303,10 +304,31 @@ namespace Microsoft.Dafny {
         var trueLiteralExpr = Expression.CreateBoolLiteral(decl.tok, true);
         typeToExpressionDict["bool"].Add(new ExpressionDepth(trueLiteralExpr, 1));
       } else if (typeToExpressionDict.ContainsKey("int")) {
-          var zeroLiteralExpr = Expression.CreateIntLiteral(decl.tok, 0);
-          typeToExpressionDict["int"].Add(new ExpressionDepth(zeroLiteralExpr, 1));
-          var oneLiteralExpr = Expression.CreateIntLiteral(decl.tok, 1);
-          typeToExpressionDict["int"].Add(new ExpressionDepth(oneLiteralExpr, 1));
+        var zeroLiteralExpr = Expression.CreateIntLiteral(decl.tok, 0);
+        typeToExpressionDict["int"].Add(new ExpressionDepth(zeroLiteralExpr, 1));
+        var oneLiteralExpr = Expression.CreateIntLiteral(decl.tok, 1);
+        typeToExpressionDict["int"].Add(new ExpressionDepth(oneLiteralExpr, 1));
+        foreach (var kvp in program.ModuleSigs) {
+          foreach (var d in kvp.Value.ModuleDef.TopLevelDecls) {
+            var cl = d as TopLevelDeclWithMembers;
+            if (cl != null) {
+              foreach (var member in cl.Members) {
+                if (member is Predicate predicate) {
+                  foreach (var e in predicate.Body.SubExpressions) {
+                    if (e is LiteralExpr literalExpr)
+                    {
+                      if ((literalExpr is not StaticReceiverExpr) && (literalExpr.Value != null) && (literalExpr.Value is not bool) && (literalExpr is not CharLiteralExpr) && (literalExpr is not StringLiteralExpr) && (literalExpr.Value is not BaseTypes.BigDec)) {
+                        if ((BigInteger)literalExpr.Value != 0 && (BigInteger)literalExpr.Value != 1) {
+                          typeToExpressionDict["int"].Add(new ExpressionDepth(e, 1));
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
       // foreach (var kvp in program.ModuleSigs) {
       //   foreach (var d in kvp.Value.ModuleDef.TopLevelDecls) {
