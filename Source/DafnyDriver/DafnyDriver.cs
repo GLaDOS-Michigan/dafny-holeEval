@@ -361,7 +361,6 @@ namespace Microsoft.Dafny {
           var foundDesiredFunction = holeInvEval.Evaluate(dafnyProgram,
               dafnyUnresolvedProgram,
               DafnyOptions.O.HoleEvaluatorFunctionName,
-              DafnyOptions.O.HoleEvaluatorBaseFunctionName,
               DafnyOptions.O.HoleEvaluatorDepth);
           return foundDesiredFunction.Result ? ExitValue.SUCCESS : ExitValue.COMPILE_ERROR;
         }

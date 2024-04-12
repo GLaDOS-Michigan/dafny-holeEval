@@ -269,7 +269,7 @@ namespace Microsoft.Dafny {
       CalcDepthOneAvailableExpresssions(program, desiredLemma, extendedExpressions);
     }
 
-    public Dictionary<string, HashSet<ExpressionDepth>> GetTypeToExpressionDict(IEnumerable<ExpressionDepth> expressionList) {
+    public static Dictionary<string, HashSet<ExpressionDepth>> GetTypeToExpressionDict(IEnumerable<ExpressionDepth> expressionList) {
       int maxEvalDepth = DafnyOptions.O.HoleEvaluatorExpressionDepth;
       Dictionary<string, HashSet<ExpressionDepth>> typeToExpressionDict = new Dictionary<string, HashSet<ExpressionDepth>>();
       foreach (var exprDepth in expressionList) {
@@ -296,9 +296,18 @@ namespace Microsoft.Dafny {
       return typeToExpressionDict;
     }
 
-    public Dictionary<string, HashSet<ExpressionDepth>> GetRawExpressions(Program program, MemberDecl decl,
-        IEnumerable<ExpressionDepth> expressions, bool addToAvailableExpressions) {
+    public static Dictionary<string, HashSet<ExpressionDepth>> GetRawExpressions(Program program, MemberDecl decl,
+        IEnumerable<ExpressionDepth> expressions) {
       var typeToExpressionDict = GetTypeToExpressionDict(expressions);
+      if (typeToExpressionDict.ContainsKey("bool")) {
+        var trueLiteralExpr = Expression.CreateBoolLiteral(decl.tok, true);
+        typeToExpressionDict["bool"].Add(new ExpressionDepth(trueLiteralExpr, 1));
+      } else if (typeToExpressionDict.ContainsKey("int")) {
+          var zeroLiteralExpr = Expression.CreateIntLiteral(decl.tok, 0);
+          typeToExpressionDict["int"].Add(new ExpressionDepth(zeroLiteralExpr, 1));
+          var oneLiteralExpr = Expression.CreateIntLiteral(decl.tok, 1);
+          typeToExpressionDict["int"].Add(new ExpressionDepth(oneLiteralExpr, 1));
+      }
       // foreach (var kvp in program.ModuleSigs) {
       //   foreach (var d in kvp.Value.ModuleDef.TopLevelDecls) {
       //     var cl = d as TopLevelDeclWithMembers;
@@ -337,19 +346,12 @@ namespace Microsoft.Dafny {
           }
         }
       }
-      if (addToAvailableExpressions) {
-        foreach (var t in typeToExpressionDict) {
-          foreach (var e in t.Value) {
-            availableExpressions.Add(e);
-          }
-        }
-      }
       return typeToExpressionDict;
     }
 
     public void CalcDepthOneAvailableExpresssions(Program program, MemberDecl decl, IEnumerable<ExpressionDepth> expressions) {
       Contract.Requires(availableExpressions.Count == 0);
-      Dictionary<string, HashSet<ExpressionDepth>> typeToExpressionDict = GetRawExpressions(program, decl, expressions, false);
+      Dictionary<string, HashSet<ExpressionDepth>> typeToExpressionDict = GetRawExpressions(program, decl, expressions);
 
       var trueExpr = Expression.CreateBoolLiteral(decl.tok, true);
       availableExpressions.Add(new ExpressionDepth(trueExpr, 1));
@@ -478,7 +480,7 @@ namespace Microsoft.Dafny {
       return;
     }
 
-    public Dictionary<string, List<string>> GetEqualExpressionList(Expression expr) {
+    public static Dictionary<string, List<string>> GetEqualExpressionList(Expression expr) {
       // The first element of each value's list in the result is the type of list
       Dictionary<string, List<string>> result = new Dictionary<string, List<string>>();
       HoleEvalGraph<string> G = new HoleEvalGraph<string>();
@@ -647,7 +649,7 @@ namespace Microsoft.Dafny {
       return result;
     }
 
-    public IEnumerable<ExpressionDepth> ListArguments(Program program, Function func) {
+    public static IEnumerable<ExpressionDepth> ListArguments(Program program, Function func) {
       foreach (var formal in func.Formals) {
         // Console.WriteLine($"\n{formal.Name}\t{formal.Type.ToString()}");
         // Console.WriteLine(formal.Type.NormalizeExpand().IsTopLevelTypeWithMembers);
@@ -723,7 +725,7 @@ namespace Microsoft.Dafny {
       }
     }
 
-    public IEnumerable<ExpressionDepth> TraverseFormal(Program program, ExpressionDepth exprDepth) {
+    public static IEnumerable<ExpressionDepth> TraverseFormal(Program program, ExpressionDepth exprDepth) {
       Contract.Requires(exprDepth != null);
       var maxExpressionDepth = DafnyOptions.O.HoleEvaluatorExpressionDepth;
       if (exprDepth.depth > maxExpressionDepth)
@@ -734,15 +736,8 @@ namespace Microsoft.Dafny {
       if (t is BoolType || t is CharType || t is IntType || t is BigOrdinalType ||
           t is RealType || t is BitvectorType || t is CollectionType) {
         if (t is BoolType) {
-          var trueLiteralExpr = Expression.CreateBoolLiteral(expr.tok, true);
-          yield return new ExpressionDepth(trueLiteralExpr, 1);
-          // NOTE: No need to add false literal since we also check for non-equality.
+          yield break;
         } else if (t is IntType) {
-          var zeroLiteralExpr = Expression.CreateIntLiteral(expr.tok, 0);
-          yield return new ExpressionDepth(zeroLiteralExpr, 1);
-          var oneLiteralExpr = Expression.CreateIntLiteral(expr.tok, 1);
-          yield return new ExpressionDepth(oneLiteralExpr, 1);
-          
           var plusOneLiteralExpr = Expression.CreateIncrement(expr, 1);
           yield return new ExpressionDepth(plusOneLiteralExpr, exprDepth.depth);
           var minusOneLiteralExpr = Expression.CreateDecrement(expr, 1);
@@ -751,12 +746,6 @@ namespace Microsoft.Dafny {
           // create cardinality
           var cardinalityExpr = Expression.CreateCardinality(expr, program.BuiltIns);
           yield return new ExpressionDepth(cardinalityExpr, exprDepth.depth);
-          {
-            var zeroLiteralExpr = Expression.CreateNatLiteral(expr.tok, 0, Type.Nat());
-            yield return new ExpressionDepth(zeroLiteralExpr, 1);
-            var oneLiteralExpr = Expression.CreateNatLiteral(expr.tok, 1, Type.Nat());
-            yield return new ExpressionDepth(oneLiteralExpr, 1);
-          }
           if (exprDepth.depth + 1 <= maxExpressionDepth) {
             
             var cardinalityMinusOneExpr = Expression.CreateDecrement(cardinalityExpr, 1);
@@ -832,14 +821,6 @@ namespace Microsoft.Dafny {
         // Console.WriteLine($"{Printer.ExprToString(td.Constraint)} {td.Var.Name} {td.BaseType} {td.BaseType is IntType}");
         // TODO possibly figure out other expressions from td.Constraint
         if (td.BaseType is IntType) {
-          var zeroLiteralExpr = Expression.CreateIntLiteral(expr.tok, 0);
-          zeroLiteralExpr.Type = t;
-          // TODO Add the literal for maximum value of this newtype decl.
-          yield return new ExpressionDepth(zeroLiteralExpr, 1);
-          var oneLiteralExpr = Expression.CreateIntLiteral(expr.tok, 1);
-          oneLiteralExpr.Type = t;
-          yield return new ExpressionDepth(oneLiteralExpr, 1);
-
           var plusOneLiteralExpr = Expression.CreateIncrement(expr, 1);
           plusOneLiteralExpr.Type = t;
           yield return new ExpressionDepth(plusOneLiteralExpr, exprDepth.depth);
@@ -863,12 +844,6 @@ namespace Microsoft.Dafny {
         var td = (SubsetTypeDecl)cl;
         // Console.WriteLine($"{Printer.ExprToString(td.Constraint)} {td.Var.Name} {td.Rhs}");
         if (td.Rhs is IntType) {
-          var zeroLiteralExpr = Expression.CreateIntLiteral(expr.tok, 0);
-          zeroLiteralExpr.Type = t;
-          yield return new ExpressionDepth(zeroLiteralExpr, 1);
-          var oneLiteralExpr = Expression.CreateIntLiteral(expr.tok, 1);
-          oneLiteralExpr.Type = t;
-          yield return new ExpressionDepth(oneLiteralExpr, 1);
           var plusOneLiteralExpr = Expression.CreateIncrement(expr, 1);
           plusOneLiteralExpr.Type = t;
           yield return new ExpressionDepth(plusOneLiteralExpr, exprDepth.depth);

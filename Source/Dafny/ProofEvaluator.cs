@@ -599,12 +599,18 @@ namespace Microsoft.Dafny {
       // }
       // return true;
       Dictionary<string, HashSet<ExpressionFinder.ExpressionDepth>> typeToExpressionDict = null;
+      List<ExpressionFinder.ExpressionDepth> availableExpressions = new List<ExpressionFinder.ExpressionDepth>();
       if (desiredLemma != null) {
         var expressions = expressionFinder.ListArguments(program, desiredLemma);
         var extendedSeqSelectExpressions = expressionFinder.ExtendSeqSelectExpressions(expressions);
         var extendedFunctionInvocationsExpressions = expressionFinder.ExtendFunctionInvocationExpressions(program, extendedSeqSelectExpressions);
         var extendedExpressions = expressionFinder.ExtendInSeqExpressions(extendedFunctionInvocationsExpressions);
-        typeToExpressionDict = expressionFinder.GetRawExpressions(program, desiredLemma, extendedExpressions, true);
+        typeToExpressionDict = ExpressionFinder.GetRawExpressions(program, desiredLemma, extendedExpressions);
+        foreach (var t in typeToExpressionDict) {
+          foreach (var e in t.Value) {
+            availableExpressions.Add(e);
+          }
+        }
       } else {
         Console.WriteLine($"{lemmaName} was not found!");
         return false;
@@ -633,12 +639,12 @@ namespace Microsoft.Dafny {
       statements.AddRange(lemmaStatements.AsEnumerable());
       var numberOfMatchedExpressions = 0;
       var selectedExpressions = new List<ExpressionFinder.ExpressionDepth>();
-      for (int i = 0; i < expressionFinder.availableExpressions.Count; i++) {
+      for (int i = 0; i < availableExpressions.Count; i++) {
         // Console.WriteLine($"{i} {Printer.ExprToString(expressionFinder.availableExpressions[i].expr)}");
-        if (expressionFinder.availableExpressions[i].depth != expressionDepth) {
+        if (availableExpressions[i].depth != expressionDepth) {
           continue;
         }
-        var matchingTrigger = DoesMatchWithAnyTrigger(expressionFinder.availableExpressions[i].expr, typeToTriggerDict);
+        var matchingTrigger = DoesMatchWithAnyTrigger(availableExpressions[i].expr, typeToTriggerDict);
         if (i == 0 || matchingTrigger != null) {
           if (i != 0) {
             // Console.WriteLine($"{i} {Printer.ExprToString(expressionFinder.availableExpressions[i].expr)} " +
@@ -646,7 +652,7 @@ namespace Microsoft.Dafny {
               // "\t\t" + Printer.ExprToString(matchingTrigger));
             numberOfMatchedExpressions++;
           }
-          selectedExpressions.Add(expressionFinder.availableExpressions[i]);
+          selectedExpressions.Add(availableExpressions[i]);
           // var l = new List<Expression>();
           // l.Add(expressionFinder.availableExpressions[i]);
           // PrintExprAndCreateProcess(program, desiredLemma, l, i);

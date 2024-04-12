@@ -24,6 +24,7 @@ namespace Microsoft.Dafny {
         private Dictionary<string, VerificationTaskArgs> tasksListDictionary = new Dictionary<string, VerificationTaskArgs>();
         public Dictionary<int, ChangeList> EnvIdToChangeList = new Dictionary<int, ChangeList>();
         public Dictionary<int, FuncCallChainCalculator.FunctionCallNode> EnvIdToFuncCallChain = new Dictionary<int, FuncCallChainCalculator.FunctionCallNode>();
+        public Dictionary<int, Dictionary<int, List<DafnyVerifierClient.ProofFailResult>>> EnvIdToFailingProofs = new Dictionary<int, Dictionary<int, List<DafnyVerifierClient.ProofFailResult>>>();
         public Dictionary<string, ModuleDefinition> FileNameToModuleDict = new Dictionary<string, ModuleDefinition>();
 
         public CallGraph<string> CG;
@@ -345,6 +346,9 @@ namespace Microsoft.Dafny {
 
         public bool ProcessOutput(int envId) {
             var res = GetFailingProofs(envId);
+            if (!EnvIdToFailingProofs.ContainsKey(envId)) {
+                EnvIdToFailingProofs[envId] = res;
+            }
             if (res.Count == 0) {
                 Console.WriteLine($"{dafnyVerifier.sw.ElapsedMilliseconds / 1000}:: found a correct path. envId={envId}\n");
                 Console.WriteLine(GetChangeListString(envId));
@@ -353,7 +357,7 @@ namespace Microsoft.Dafny {
             return false;
         }
 
-        public async Task<bool> Evaluate(Program program, Program unresolvedProgram, string funcName, string baseFuncName, int depth) {
+        public async Task<bool> Evaluate(Program program, Program unresolvedProgram, string funcName, int depth) {
             if (DafnyOptions.O.HoleEvaluatorBaseFunctionName == "") {
                 Console.WriteLine("no function specified as the root of protocol actions");
                 return false;
@@ -444,13 +448,23 @@ namespace Microsoft.Dafny {
             //     PrintChainNodes(EnvIdToFuncCallChain[envId]);
             //     Console.WriteLine("-------------------------------------------------------");
             // }
-            await dafnyVerifier.RunVerificationRequestsStartingFromEnvironment(0, true);
+            // await dafnyVerifier.RunVerificationRequestsStartingFromEnvironment(0, true);
             // foreach (var f in CorrectVerificationCount.Keys) {
             //     Console.WriteLine($"{f}");
             //     Console.WriteLine($"\tCorrects:\t{CorrectVerificationCount[f]}");
             //     Console.WriteLine($"\tFailed:\t{FailedVerificationCount[f]}");
             //     Console.WriteLine($"\tTimeouts:\t{TimeoutVerificationCount[f]}\n");
             // }
+            // for (int i = 0; i < envIdList.Count; i++) {
+            //     if (EnvIdToFailingProofs[i].Count > 0) {
+            //         Console.WriteLine(i);
+            //     }
+            // }
+            var candidateInvariants = InvariantFinder.GetCandidateInvariants(program, member as Function);
+            foreach (var candidate in candidateInvariants) {
+                Console.WriteLine(Printer.ExprToString(candidate.expr));
+            }
+            return true;
             var DNFGraphGraphviz = ConvertDNFGraphToGraphviz(rootDNFnode);
             if (DafnyOptions.O.LogDotGraph != "") {
                 File.WriteAllText(DafnyOptions.O.LogDotGraph, DNFGraphGraphviz);
