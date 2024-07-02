@@ -869,7 +869,7 @@ namespace Microsoft.Dafny {
                 
                 var baseArgs = tasksListDictionary[filename].Arguments.ToList();
                 baseArgs.Add($"/proc:*{member.FullSanitizedName}VacuityLemma");
-                dafnyVerifier.AddVerificationRequestToEnvironment(envId, "", filename, baseArgs, $"1m", 5);
+                dafnyVerifier.AddVerificationRequestToEnvironment(envId, "", filename, baseArgs, true, false, $"1m", 5);
                 baseArgs.RemoveAt(baseArgs.Count - 1);
                 
                 foreach (var file in affectedFiles) {

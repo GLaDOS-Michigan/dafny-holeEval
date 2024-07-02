@@ -603,7 +603,7 @@ namespace Microsoft.Dafny {
       if (desiredLemma != null) {
         var expressions = expressionFinder.ListArguments(program, desiredLemma);
         var extendedSeqSelectExpressions = expressionFinder.ExtendSeqSelectExpressions(expressions);
-        var extendedFunctionInvocationsExpressions = expressionFinder.ExtendFunctionInvocationExpressions(program, extendedSeqSelectExpressions);
+        var extendedFunctionInvocationsExpressions = ExpressionFinder.ExtendFunctionInvocationExpressions(program, extendedSeqSelectExpressions);
         var extendedExpressions = expressionFinder.ExtendInSeqExpressions(extendedFunctionInvocationsExpressions);
         typeToExpressionDict = ExpressionFinder.GetRawExpressions(program, desiredLemma, extendedExpressions);
         foreach (var t in typeToExpressionDict) {

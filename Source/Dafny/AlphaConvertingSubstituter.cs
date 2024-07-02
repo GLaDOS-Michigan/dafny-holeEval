@@ -19,7 +19,7 @@ namespace Microsoft.Dafny {
       var newBoundVars = vars.Count == 0 ? vars : new List<BoundVar>();
       foreach (var bv in vars) {
         var tt = Resolver.SubstType(bv.Type, typeMap);
-        var newBv = new BoundVar(bv.tok, "_'" + bv.Name, tt);
+        var newBv = new BoundVar(bv.tok, HoleEvaluator.RandomString(6) + "_'" + bv.Name, tt);
         newBoundVars.Add(newBv);
         // update substMap to reflect the new BoundVar substitutions
         var ie = new IdentifierExpr(newBv.tok, newBv.Name);

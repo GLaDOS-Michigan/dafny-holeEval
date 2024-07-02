@@ -152,7 +152,7 @@ namespace Microsoft.Dafny {
                 }
                 finalEnvironments.Add(envId);
                 foreach (var task in tasksListDictionary) {
-                    dafnyVerifier.AddVerificationRequestToEnvironment(envId, "", task.Key, task.Value.Arguments.ToList());
+                    dafnyVerifier.AddVerificationRequestToEnvironment(envId, "", task.Key, task.Value.Arguments.ToList(), false, true);
                 }
             }
             await dafnyVerifier.RunVerificationRequestsStartingFromEnvironment(0, true);

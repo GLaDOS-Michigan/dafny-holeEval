@@ -120,7 +120,7 @@ namespace Microsoft.Dafny {
           bindings.Add(new ActualBinding(null, arg));
         }
         var lemmaCallExpr = new ApplySuffix(lemma.tok, null, new NameSegment(lemma.tok, lemma.Name, new List<Type>()), bindings, lemma.tok);
-        yield return new ExpressionFinder.ExpressionDepth(lemmaCallExpr, currentMaxDepth);
+        yield return new ExpressionFinder.ExpressionDepth(lemmaCallExpr, currentMaxDepth, false);
         yield break;
       }
       var t = lemma.Ins[shouldFillIndex].Type;

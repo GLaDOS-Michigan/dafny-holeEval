@@ -43,8 +43,10 @@ message TwoStageRequest {
   bool runExclusive = 2;
   // List of verification requests to be run in the first stage
   repeated VerificationRequest firstStageRequestsList = 3;
+  // List of prerequisite verification requests for the 2nd stage
+  repeated VerificationRequest prerequisiteForSecondStageRequestsList = 4;
   // List of verification requests to be run in the second stage
-  repeated VerificationRequest secondStageRequestsList = 4;
+  repeated VerificationRequest secondStageRequestsList = 5;
 }
 
 message TmpFolder {
@@ -77,6 +79,10 @@ message VerificationRequest {
   // How long should it wait for the Dafny request? 
   // This value will be given to `timeout` command in Linux (e.g. 10s, 1m)
   string timeout = 4;
+
+  // true if the request should pass the verifier
+  // false otherwise (i.e. prover should fail in this case)
+  bool shouldPassNotFail = 5;
 }
 
 message VerificationResponseList {

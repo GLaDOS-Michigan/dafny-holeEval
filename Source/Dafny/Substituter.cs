@@ -125,6 +125,15 @@ namespace Microsoft.Dafny {
       } else if (expr is FunctionCallExpr) {
         FunctionCallExpr e = (FunctionCallExpr)expr;
         Expression receiver = Substitute(e.Receiver);
+        if (e.Args == null) {
+          List<ActualBinding> newBindings = new List<ActualBinding>();
+          foreach (var arg in e.Bindings.ArgumentBindings) {
+            Expression newArg = Substitute(arg.Actual);
+            newBindings.Add(new ActualBinding(null, newArg));
+          }
+          FunctionCallExpr newFce = new FunctionCallExpr(expr.tok, e.Name, e.Receiver, e.OpenParen, newBindings, e.AtLabel);
+          newExpr = newFce;
+        } else {
         List<Expression> newArgs = SubstituteExprList(e.Args);
         var newTypeApplicationAtEnclosingClass = SubstituteTypeList(e.TypeApplication_AtEnclosingClass);
         var newTypeApplicationJustFunction = SubstituteTypeList(e.TypeApplication_JustFunction);
@@ -140,7 +149,7 @@ namespace Microsoft.Dafny {
           newFce.IsByMethodCall = e.IsByMethodCall;
           newExpr = newFce;
         }
-
+        }
       } else if (expr is ApplyExpr) {
         ApplyExpr e = (ApplyExpr)expr;
         Expression fn = Substitute(e.Function);
@@ -321,6 +330,19 @@ namespace Microsoft.Dafny {
         }
 
       } else if (expr is ConcreteSyntaxExpression concreteSyntaxExpression) {
+        if (concreteSyntaxExpression.ResolvedExpression == null) {
+          if (concreteSyntaxExpression is ExprDotName exprDotName) {
+            Expression Lhs = Substitute(exprDotName.Lhs);
+            return new ExprDotName(exprDotName.tok, Lhs, exprDotName.SuffixName, exprDotName.OptTypeArguments);
+          } else if (concreteSyntaxExpression is ChainingExpression chainingExpression) {
+            var newOperands = new List<Expression>();
+            foreach (var operand in chainingExpression.Operands) {
+              newOperands.Add(Substitute(operand));
+            }
+            return new ChainingExpression(chainingExpression.tok, newOperands, chainingExpression.Operators,
+              chainingExpression.OperatorLocs, chainingExpression.PrefixLimits);
+          }
+        }
         Contract.Assert(concreteSyntaxExpression.ResolvedExpression != null);
         return Substitute(concreteSyntaxExpression.ResolvedExpression);
 

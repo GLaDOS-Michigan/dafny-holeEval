@@ -140,6 +140,7 @@ namespace Microsoft.Dafny {
 
     public bool CalculateDNF = false;
     public bool CombineOpaqueResult = false;
+    public string DatatypeModelInit = "";
     public bool RunChangeLists = false;
     public string ChangeListPath = "";
     public bool CreateOpaqueFunc = false;
@@ -157,6 +158,7 @@ namespace Microsoft.Dafny {
     public string HoleEvaluatorWorkingDirectory = "/tmp/";
     public string HoleEvaluatorServerIpPortList = null;
     public string HoleEvaluatorInvariant = null;
+    public HashSet<string> HoleEvaluatorIncludedFormals = null;
     public string HoleEvaluatorConstraint = null;
     public string HoleEvaluatorRemoveFileLine = null;
     public string ProofEvaluatorRemoveFileLine = null;
@@ -531,6 +533,12 @@ namespace Microsoft.Dafny {
           CombineOpaqueResult = true;
           return true;
 
+        case "datatypeModelInit":
+          if (ps.ConfirmArgumentCount(1)) {
+            DatatypeModelInit = args[ps.i];
+          }
+          return true;
+
         case "runChangeLists":
           RunChangeLists = true;
           return true;
@@ -572,6 +580,15 @@ namespace Microsoft.Dafny {
         case "holeEvalInv":
           if (ps.ConfirmArgumentCount(1)) {
             HoleEvaluatorInvariant = args[ps.i];
+          }
+          return true;
+
+        case "holeEvalFormals":
+          if (ps.ConfirmArgumentCount(1)) {
+            if (HoleEvaluatorIncludedFormals == null) {
+              HoleEvaluatorIncludedFormals = new HashSet<string>();
+            }
+            HoleEvaluatorIncludedFormals.Add(args[ps.i]);
           }
           return true;
 

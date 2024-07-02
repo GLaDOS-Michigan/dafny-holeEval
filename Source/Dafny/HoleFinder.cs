@@ -529,7 +529,7 @@ namespace Microsoft.Dafny {
           foreach (var indexFailingKV in FailingLemmas)
           {
             var verificationReq = dafnyVerifier.EnvironmentVerificationTasks[baseFuncEnvId][indexFailingKV.Key];
-            dafnyVerifier.AddVerificationRequestToEnvironment(envId, verificationReq);
+            dafnyVerifier.AddVerificationRequestToEnvironment(envId, verificationReq, false);
           }
           EnvIdToChangeList[envId] = changeList;
           endEnvId = envId;

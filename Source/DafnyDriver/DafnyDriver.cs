@@ -291,11 +291,18 @@ namespace Microsoft.Dafny {
       ProofEvaluator proofEvaluator = null;
       HoleEvaluator holeEvaluator = null;
       HoleInvEval holeInvEval = null;
+      DatatypeModel datatypeModel = null;
       DNFCalculator dnfCalculator = null;
       try {
         if (DafnyOptions.O.CombineOpaqueResult) {
           var opaqueCombiner = new OpaqueCombiner();
           Task<bool> result = opaqueCombiner.Evaluate(dafnyProgram, dafnyUnresolvedProgram);
+          return result.Result ? ExitValue.SUCCESS : ExitValue.COMPILE_ERROR;
+        }
+        if (DafnyOptions.O.DatatypeModelInit != "") {
+          datatypeModel = new DatatypeModel();
+          Task<bool> result = datatypeModel.Evaluate(dafnyProgram, dafnyUnresolvedProgram,
+            DafnyOptions.O.DatatypeModelInit);
           return result.Result ? ExitValue.SUCCESS : ExitValue.COMPILE_ERROR;
         }
         if (DafnyOptions.O.CalculateDNF) {
