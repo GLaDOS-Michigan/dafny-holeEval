@@ -232,6 +232,7 @@ namespace Microsoft.Dafny {
     public Dictionary<IMessage, int> requestToLemmaStartPosition = new Dictionary<IMessage, int>();
 
     public List<List<VerificationRequest>> EnvironmentSetupTasks = new List<List<VerificationRequest>>();
+    public List<List<VerificationRequest>> EnvironmentPrerequisiteVerificationTasks = new List<List<VerificationRequest>>();
     public List<List<VerificationRequest>> EnvironmentVerificationTasks = new List<List<VerificationRequest>>();
 
     public void InitializeBaseFoldersInRemoteServers(Program program, string commonPrefix) {
@@ -301,22 +302,30 @@ namespace Microsoft.Dafny {
         env.Add(request);
       }
       EnvironmentSetupTasks.Add(env);
+      EnvironmentPrerequisiteVerificationTasks.Add(new List<VerificationRequest>());
       EnvironmentVerificationTasks.Add(new List<VerificationRequest>());
       return EnvironmentSetupTasks.Count - 1;
     }
 
-    public void AddVerificationRequestToEnvironment(int envId, VerificationRequest request) {
+    public void AddVerificationRequestToEnvironment(int envId, VerificationRequest request, bool isPrerequisite) {
       Contract.Assert(envId >= 0);
+      Contract.Assert(envId < EnvironmentPrerequisiteVerificationTasks.Count);
       Contract.Assert(envId < EnvironmentVerificationTasks.Count);
-      EnvironmentVerificationTasks[envId].Add(request);
+      if (isPrerequisite) {
+        EnvironmentPrerequisiteVerificationTasks[envId].Add(request);
+      } else {
+        EnvironmentVerificationTasks[envId].Add(request);
+      }
     }
 
-    public void AddVerificationRequestToEnvironment(int envId, string code, string filename, List<string> args, string timeout = "20m", int rlimitMultipler = 1) {
+    public void AddVerificationRequestToEnvironment(int envId, string code, string filename, List<string> args, bool isPrerequisite, bool shouldPassNotFail, string timeout = "20m", int rlimitMultipler = 1) {
       Contract.Assert(envId >= 0);
+      Contract.Assert(envId < EnvironmentPrerequisiteVerificationTasks.Count);
       Contract.Assert(envId < EnvironmentVerificationTasks.Count);
       VerificationRequest request = new VerificationRequest();
       request.Code = code;
       request.Path = filename;
+      request.ShouldPassNotFail = shouldPassNotFail;
       request.Timeout = timeout;
       if (rlimitMultipler == 1) {
         foreach (var arg in args) {
@@ -333,12 +342,18 @@ namespace Microsoft.Dafny {
           }
         }
       }
-      EnvironmentVerificationTasks[envId].Add(request);
+      if (isPrerequisite) {
+        EnvironmentPrerequisiteVerificationTasks[envId].Add(request);
+      } else {
+        EnvironmentVerificationTasks[envId].Add(request);
+      }
     }
 
     public void ResetVerificationTasksInEnvironment(int envId) {
       Contract.Assert(envId >= 0);
+      Contract.Assert(envId < EnvironmentPrerequisiteVerificationTasks.Count);
       Contract.Assert(envId < EnvironmentVerificationTasks.Count);
+      EnvironmentPrerequisiteVerificationTasks[envId].Clear();
       EnvironmentVerificationTasks[envId].Clear();
     }
 
@@ -350,6 +365,9 @@ namespace Microsoft.Dafny {
         request.RunExclusive = runExclusive;
         foreach (var req in EnvironmentSetupTasks[cnt]) {
           request.FirstStageRequestsList.Add(req);
+        }
+        foreach (var req in EnvironmentPrerequisiteVerificationTasks[cnt]) {
+          request.PrerequisiteForSecondStageRequestsList.Add(req);
         }
         foreach (var req in EnvironmentVerificationTasks[cnt]) {
           request.SecondStageRequestsList.Add(req);
@@ -878,7 +896,7 @@ namespace Microsoft.Dafny {
             // Console.WriteLine($"finish executing {requestToCnt[request]}");
           } catch (RpcException ex) {
             Console.WriteLine($"{sw.ElapsedMilliseconds / 1000}:: Restarting task #{requestToCnt[request]} {ex.Message}");
-            if (retries < 5) {
+            if (retries < 0) {
               RestartTask(request);
               retries++;
               goto start;

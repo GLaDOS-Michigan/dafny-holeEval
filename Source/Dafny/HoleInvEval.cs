@@ -4,6 +4,7 @@ using System.IO;
 using System.Text.Json;
 using System.Collections;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Diagnostics.Contracts;
 using System.Diagnostics;
 using System.Reflection;
@@ -24,7 +25,7 @@ namespace Microsoft.Dafny {
         private Dictionary<string, VerificationTaskArgs> tasksListDictionary = new Dictionary<string, VerificationTaskArgs>();
         public Dictionary<int, ChangeList> EnvIdToChangeList = new Dictionary<int, ChangeList>();
         public Dictionary<int, FuncCallChainCalculator.FunctionCallNode> EnvIdToFuncCallChain = new Dictionary<int, FuncCallChainCalculator.FunctionCallNode>();
-        public Dictionary<int, Dictionary<int, List<DafnyVerifierClient.ProofFailResult>>> EnvIdToFailingProofs = new Dictionary<int, Dictionary<int, List<DafnyVerifierClient.ProofFailResult>>>();
+        public ConcurrentDictionary<int, Dictionary<int, List<DafnyVerifierClient.ProofFailResult>>> EnvIdToFailingProofs = new ConcurrentDictionary<int, Dictionary<int, List<DafnyVerifierClient.ProofFailResult>>>();
         public Dictionary<string, ModuleDefinition> FileNameToModuleDict = new Dictionary<string, ModuleDefinition>();
 
         public CallGraph<string> CG;
@@ -36,6 +37,7 @@ namespace Microsoft.Dafny {
 
         private string baseChangeFile = "";
         private Change baseChange = null;
+        private int DNFGraphCalcEnvCount = 0;
         public Dictionary<string, List<Change>> GetBaseChangeList() {
             Dictionary<string, List<Change>> res = new Dictionary<string, List<Change>>();
             if (baseChange != null) {
@@ -195,6 +197,77 @@ namespace Microsoft.Dafny {
             return graphVizOutput;
         }
 
+        private bool IsCandidatePassPrerequisites(int index)
+        {
+            var TSRequest = dafnyVerifier.requestsList[index] as TwoStageRequest;
+            var TSOutput = dafnyVerifier.dafnyOutput[TSRequest] as VerificationResponseList;
+            if (TSOutput.ResponseList.Count < 
+                    TSRequest.PrerequisiteForSecondStageRequestsList.Count + 
+                    TSRequest.SecondStageRequestsList.Count)
+            {
+                return false;
+            } else {
+                return true;
+            }
+        }
+
+        private Dictionary<int, List<DafnyVerifierClient.ProofFailResult>> IsPassingPartialSelfInductiveTest(int index)
+        {
+            Dictionary<int, List<DafnyVerifierClient.ProofFailResult>> result = 
+                new Dictionary<int, List<DafnyVerifierClient.ProofFailResult>>();
+            var TSRequest = dafnyVerifier.requestsList[index] as TwoStageRequest;
+            var TSOutput = dafnyVerifier.dafnyOutput[TSRequest] as VerificationResponseList;
+            var execTime = TSOutput.ExecutionTimeInMs;
+            int timeoutVerifyCount = 0;
+            int failedVerifyCount = 0;
+            var combinedRequests = new List<VerificationRequest>();
+            combinedRequests.AddRange(TSRequest.PrerequisiteForSecondStageRequestsList);
+            combinedRequests.AddRange(TSRequest.SecondStageRequestsList);
+            for (int i = 0; i < combinedRequests.Count; i++)
+            {
+                var request = combinedRequests[i];
+                if (request.Arguments.Count == 0)
+                {
+                    continue;
+                }
+                if (i >= TSOutput.ResponseList.Count) {
+                    // one of the prerequisites has failed and second stage requests are not executed
+                    break;
+                }
+                var output = TSOutput.ResponseList[i];
+                var response = output.Response.ToStringUtf8();
+                var filePath = output.FileName;
+                string sanitizedFuncName = "";
+                if (request.Arguments[request.Arguments.Count - 1].StartsWith("/proc:*")) {
+                    sanitizedFuncName = request.Arguments[request.Arguments.Count - 1].Substring(7);
+                }
+                if (request.ShouldPassNotFail == false) {
+                    // should fail in this case
+                    Result res = DafnyVerifierClient.IsCorrectOutputForValidityCheck(response);
+                    if (res == Result.ProvedFalse) {
+                        Console.WriteLine($"make inv false in envId={index} : {response}");
+                        result[i] = DafnyVerifierClient.GetFailingFunctionResults(sanitizedFuncName, filePath, response);
+                        failedVerifyCount++;
+                        return result;
+                    }
+                } else {
+                    // should pass
+                    Result res = DafnyVerifierClient.IsCorrectOutputForNoErrors(response);
+                    if (res != Result.CorrectProof)
+                    {
+                        Console.WriteLine($"incorrect proof for envId={index} : {response}");
+                        result[i] = DafnyVerifierClient.GetFailingFunctionResults(sanitizedFuncName, filePath, response);
+                        if (res == Result.InconclusiveProof) {
+                            timeoutVerifyCount++;
+                        } else {
+                            failedVerifyCount++;
+                        }
+                    }
+                }
+            }
+            return result;
+        }
+
         private Dictionary<int, List<DafnyVerifierClient.ProofFailResult>> GetFailingProofs(int index)
         {
             Dictionary<int, List<DafnyVerifierClient.ProofFailResult>> result = 
@@ -329,12 +402,18 @@ namespace Microsoft.Dafny {
             var TSRequest = dafnyVerifier.requestsList[index] as TwoStageRequest;
             var TSOutput = dafnyVerifier.dafnyOutput[TSRequest] as VerificationResponseList;
             var res = "";
-            for (int i = 0; i < TSRequest.SecondStageRequestsList.Count; i++)
+            var combinedRequests = new List<VerificationRequest>();
+            combinedRequests.AddRange(TSRequest.PrerequisiteForSecondStageRequestsList);
+            combinedRequests.AddRange(TSRequest.SecondStageRequestsList);
+            for (int i = 0; i < combinedRequests.Count; i++)
             {
-                var request = TSRequest.SecondStageRequestsList[i];
+                var request = combinedRequests[i];
                 if (request.Arguments.Count == 0)
                 {
                     continue;
+                }
+                if (i >= TSOutput.ResponseList.Count) {
+                    break;
                 }
                 var output = TSOutput.ResponseList[i];
                 var response = output.Response.ToStringUtf8();
@@ -345,16 +424,168 @@ namespace Microsoft.Dafny {
         }
 
         public bool ProcessOutput(int envId) {
-            var res = GetFailingProofs(envId);
-            if (!EnvIdToFailingProofs.ContainsKey(envId)) {
-                EnvIdToFailingProofs[envId] = res;
+            if (envId >= DNFGraphCalcEnvCount) {
+                var res = IsPassingPartialSelfInductiveTest(envId);
+                if (!EnvIdToFailingProofs.ContainsKey(envId)) {
+                    EnvIdToFailingProofs[envId] = res;
+                }
+                if (res.Count == 0) {
+                    Console.WriteLine($"{dafnyVerifier.sw.ElapsedMilliseconds / 1000}:: found a correct path. envId={envId}\n");
+                    Console.WriteLine(GetChangeListString(envId));
+                    return true;
+                }
+                return false;
+            } else {
+                var res = GetFailingProofs(envId);
+                if (!EnvIdToFailingProofs.ContainsKey(envId)) {
+                    EnvIdToFailingProofs[envId] = res;
+                }
+                if (res.Count == 0) {
+                    Console.WriteLine($"{dafnyVerifier.sw.ElapsedMilliseconds / 1000}:: found a correct path. envId={envId}\n");
+                    Console.WriteLine(GetChangeListString(envId));
+                    return true;
+                }
+                return false;
             }
-            if (res.Count == 0) {
-                Console.WriteLine($"{dafnyVerifier.sw.ElapsedMilliseconds / 1000}:: found a correct path. envId={envId}\n");
-                Console.WriteLine(GetChangeListString(envId));
-                return true;
+        }
+
+        public string ReplaceVariableInExpr(Expression expr, Function nextPredicate, Function inductiveInv) {
+            var argsSubstMap = new Dictionary<IVariable, Expression>();  // maps formal arguments to actuals
+            Dictionary<string, HashSet<Expression>> typeToExpressionDictForInputs = new Dictionary<string, HashSet<Expression>>();
+            foreach (var formal in nextPredicate.Formals) {
+                var identExpr = Expression.CreateIdentExpr(formal);
+                var typeString = formal.Type.ToString();
+                if (typeToExpressionDictForInputs.ContainsKey(typeString)) {
+                    typeToExpressionDictForInputs[typeString].Add(identExpr);
+                } else {
+                    var lst = new HashSet<Expression> {
+                      identExpr
+                    };
+                    typeToExpressionDictForInputs.Add(typeString, lst);
+                }
+            }
+            if (typeToExpressionDictForInputs.Count == 1) {
+                var typeStr = nextPredicate.Formals[0].Type.ToString();
+                Contract.Assert(typeToExpressionDictForInputs[typeStr].Count == 2);
+                Contract.Assert(inductiveInv.Formals.Count == 1);
+                Contract.Assert(inductiveInv.Formals[0].Type.ToString() == typeStr);
+                argsSubstMap.Add(nextPredicate.Formals[0], Expression.CreateIdentExpr(nextPredicate.Formals[1]));
+                var substituter = new AlphaConvertingSubstituter(expr, argsSubstMap, new Dictionary<TypeParameter, Type>());
+                var subtitutedNamesExpr = substituter.Substitute(expr);
+                return Printer.ExprToString(subtitutedNamesExpr);
+            } else {
+                var typeStr = nextPredicate.Formals[1].Type.ToString();
+                Contract.Assert(typeToExpressionDictForInputs[typeStr].Count == 2);
+                Contract.Assert(nextPredicate.Formals.Count == 3);
+                Contract.Assert(inductiveInv.Formals.Count == 2);
+                Contract.Assert(inductiveInv.Formals[1].Type.ToString() == typeStr);
+                argsSubstMap.Add(nextPredicate.Formals[1], Expression.CreateIdentExpr(nextPredicate.Formals[2]));
+                var substituter = new AlphaConvertingSubstituter(expr, argsSubstMap, new Dictionary<TypeParameter, Type>());
+                var subtitutedNamesExpr = substituter.Substitute(expr);
+                return Printer.ExprToString(subtitutedNamesExpr);
+            }
+        }
+
+        public string GetCandidateInductivityLemmaPrefix(Function nextFunc, Function inductiveInv, bool includeModuleInTypes) {
+            string res = "lemma candidateInductivityLemma(";
+            var nextParamList = HoleEvaluator.GetFunctionParamList(nextFunc, "", includeModuleInTypes);
+            var invParamList = HoleEvaluator.GetFunctionParamList(inductiveInv, "", includeModuleInTypes);
+            res += nextParamList.Item2;
+            res += ")\n";
+            res += $"\trequires {nextFunc.Name}({String.Join(", ", nextParamList.Item1)})\n";
+            res += $"\trequires {inductiveInv.Name}({String.Join(", ", invParamList.Item1)})\n";
+            return res;
+        }
+
+        public string GetCandidateMakeInvFalseLemma(Function nextFunc, Function inductiveInv, bool includeModuleInTypes) {
+            string res = "lemma candidateMakeInvFalseLemma(";
+            var nextParamList = HoleEvaluator.GetFunctionParamList(nextFunc, "", includeModuleInTypes);
+            var invParamList = HoleEvaluator.GetFunctionParamList(inductiveInv, "", includeModuleInTypes);
+            res += nextParamList.Item2;
+            res += ")\n";
+            res += $"\trequires {nextFunc.Name}({String.Join(", ", nextParamList.Item1)})\n";
+            res += $"\trequires {inductiveInv.Name}({String.Join(", ", invParamList.Item1)})\n";
+            res += $"\tensures false\n{{}}\n";
+            return res;
+        }
+
+        public string GetCandidateAlreadyIncludedLemma(Function nextFunc, Function inductiveInv, Expression candidate, bool includeModuleInTypes) {
+            string res = "lemma candidateAlreadyIncludedLemma(";
+            var nextParamList = HoleEvaluator.GetFunctionParamList(nextFunc, "", includeModuleInTypes);
+            var invParamList = HoleEvaluator.GetFunctionParamList(inductiveInv, "", includeModuleInTypes);
+            res += nextParamList.Item2;
+            res += ")\n";
+            res += $"\trequires {nextFunc.Name}({String.Join(", ", nextParamList.Item1)})\n";
+            res += $"\trequires {inductiveInv.Name}({String.Join(", ", invParamList.Item1)})\n";
+            res += $"\tensures {Printer.ExprToString(candidate)}\n{{}}\n";
+            return res;
+        }
+
+        private bool HasResultedIntoFalseInv(int envId) {
+            if (EnvIdToFailingProofs.ContainsKey(envId) == false) {
+                return false;
+            }
+            var res = EnvIdToFailingProofs[envId];
+            if (res.Count == 1 && res.ContainsKey(0) && res[0].Count == 1) {
+                var failedResult = res[0][0];
+                if (failedResult.FuncBoogieName.EndsWith("candidateMakeInvFalseLemma")) {
+                    return true;
+                }
             }
             return false;
+        }
+        private int CreateEnvironmentForCandidate(MemberDecl baseFunc, MemberDecl indInv, ExpressionFinder.ExpressionDepth candidate) {
+            Expression invNewBody = Expression.CreateAnd((indInv as Function).Body, candidate.expr);
+            string invNewBodyStr = $"{{{Printer.ExprToString(invNewBody)}}}\n";
+            string candidateMakeInvFalseLemmaStr = GetCandidateMakeInvFalseLemma(baseFunc as Function, indInv as Function, false);
+            string candidateAlreadyIncludedLemmaStr = GetCandidateAlreadyIncludedLemma(baseFunc as Function, indInv as Function, candidate.expr, false);
+            string candidateInductivityLemmaStr = GetCandidateInductivityLemmaPrefix(baseFunc as Function, indInv as Function, false);
+            var candidateInvReplacedWithNewState = ReplaceVariableInExpr(candidate.expr, baseFunc as Function, indInv as Function);
+
+            candidateInductivityLemmaStr += $"\trequires {Printer.ExprToString(candidate.expr)}\n";
+            candidateInductivityLemmaStr += $"\tensures  {candidateInvReplacedWithNewState}\n{{}}";
+            invNewBodyStr += candidateInductivityLemmaStr + "\n\n" + candidateMakeInvFalseLemmaStr + "\n" + candidateAlreadyIncludedLemmaStr + "\n";
+            Change invChange = DafnyVerifierClient.CreateChange(
+                ChangeTypeEnum.ChangeFunctionBody,
+                indInv.BodyStartTok,
+                indInv.BodyEndTok,
+                invNewBodyStr,
+                "",
+                invNewBodyStr
+            );
+            var changeList = GetBaseChangeList();
+            DafnyVerifierClient.AddFileToChangeList(ref changeList, invChange);
+            var envId = dafnyVerifier.CreateEnvironment(includeParser, changeList);
+
+            EnvIdToChangeList[envId] = OpaqueCombiner.ConvertToProtoChangeList(changeList);
+            EnvIdToFuncCallChain[envId] = null;
+
+            var filename = includeParser.Normalized(indInv.tok.filename);
+            var affectedFiles = includeParser.GetListOfAffectedFilesBy(filename).ToList();
+            if (baseChangeFile != "") {
+                var baseChangeAffectedFiles = includeParser.GetListOfAffectedFilesBy(includeParser.Normalized(baseChangeFile));
+                affectedFiles.AddRange(baseChangeAffectedFiles);
+            }
+            affectedFiles = affectedFiles.Distinct().ToList();
+
+            var baseArgs = tasksListDictionary[filename].Arguments.ToList();
+            
+            baseArgs.Add($"/proc:*candidateMakeInvFalseLemma");
+            dafnyVerifier.AddVerificationRequestToEnvironment(envId, "", filename, baseArgs, true, false, $"1m", 5);
+            baseArgs.RemoveAt(baseArgs.Count - 1);
+
+            baseArgs.Add($"/proc:*candidateAlreadyIncludedLemma");
+            dafnyVerifier.AddVerificationRequestToEnvironment(envId, "", filename, baseArgs, true, true, $"1m", 5);
+            baseArgs.RemoveAt(baseArgs.Count - 1);
+
+            baseArgs.Add($"/proc:*candidateInductivityLemma");
+            dafnyVerifier.AddVerificationRequestToEnvironment(envId, "", filename, baseArgs, true, true, $"1m", 5);
+            baseArgs.RemoveAt(baseArgs.Count - 1);
+
+            foreach (var file in affectedFiles) {
+                OpaqueEvaluator.AddVerificationRequestPerCallable(envId, file, tasksListDictionary[file].Arguments.ToList(), dafnyVerifier, FileNameToModuleDict, 5);
+            }
+            return envId;
         }
 
         public async Task<bool> Evaluate(Program program, Program unresolvedProgram, string funcName, int depth) {
@@ -383,6 +614,7 @@ namespace Microsoft.Dafny {
 
             var member = HoleEvaluator.GetMember(program, DafnyOptions.O.HoleEvaluatorBaseFunctionName);
             var unresolvedMember = HoleEvaluator.GetMemberFromUnresolved(unresolvedProgram, DafnyOptions.O.HoleEvaluatorBaseFunctionName);
+
             CG = DNFCalculator.GetCallGraph(member as Function);
             Console.WriteLine(ConvertCallGraphToGraphViz(CG));
             var DNFform = DNFCalculator.GetDisjunctiveNormalForm(member);
@@ -390,6 +622,7 @@ namespace Microsoft.Dafny {
             HashSet<int> envIdList = new HashSet<int>();
             rootDNFnode = new DNFNode(member.FullDafnyName);
             foreach (var exprCallChainTuple in DNFform) {
+                break;
                 var flattenChain = FlattenChain(exprCallChainTuple.Item2, 0, "");
                 if (!flattenChain.Contains(funcName)) {
                     continue;
@@ -428,7 +661,7 @@ namespace Microsoft.Dafny {
                 
                 var baseArgs = tasksListDictionary[filename].Arguments.ToList();
                 baseArgs.Add($"/proc:*{member.FullSanitizedName}VacuityLemma");
-                dafnyVerifier.AddVerificationRequestToEnvironment(envId, "", filename, baseArgs, $"1m", 5);
+                dafnyVerifier.AddVerificationRequestToEnvironment(envId, "", filename, baseArgs, true, false, $"1m", 5);
                 baseArgs.RemoveAt(baseArgs.Count - 1);
                 
                 foreach (var file in affectedFiles) {
@@ -442,6 +675,7 @@ namespace Microsoft.Dafny {
                 //     break;
                 // }
             }
+            DNFGraphCalcEnvCount = envIdList.Count;
             Console.WriteLine(ConvertDNFGraphToGraphviz(rootDNFnode, false));
             // foreach (var envId in envIdList) {
             //     Console.WriteLine(envId);
@@ -460,17 +694,108 @@ namespace Microsoft.Dafny {
             //         Console.WriteLine(i);
             //     }
             // }
-            var candidateInvariants = InvariantFinder.GetCandidateInvariants(program, member as Function);
+            var singletonCandidateInvariants = InvariantFinder.GetCandidateInvariants(program, member as Function).ToList();
+            List<ExpressionFinder.ExpressionDepth> candidateInvariants = new List<ExpressionFinder.ExpressionDepth>();
+            candidateInvariants.AddRange(singletonCandidateInvariants);
+            
+            var indInv = HoleEvaluator.GetMember(program, DafnyOptions.O.HoleEvaluatorInvariant);
+            var unresolvedIndInv = HoleEvaluator.GetMemberFromUnresolved(unresolvedProgram, DafnyOptions.O.HoleEvaluatorInvariant);
             foreach (var candidate in candidateInvariants) {
-                Console.WriteLine(Printer.ExprToString(candidate.expr));
+                var envId = CreateEnvironmentForCandidate(member, indInv, candidate);
+                envIdList.Add(envId);
+                Console.WriteLine($"{envId} -> {Printer.ExprToString(candidate.expr)}");
             }
-            return true;
-            var DNFGraphGraphviz = ConvertDNFGraphToGraphviz(rootDNFnode);
-            if (DafnyOptions.O.LogDotGraph != "") {
-                File.WriteAllText(DafnyOptions.O.LogDotGraph, DNFGraphGraphviz);
+            if (DafnyOptions.O.HoleEvaluatorIncludeFunctionInvocations) {
+                var arguments = ExpressionFinder.ListArguments(program, member as Function, true);
+                foreach (var e in ExpressionFinder.ExtendFunctionInvocationExpressions(program, arguments)) {
+                    if (Printer.ExprToString(e.expr).StartsWith($"{member.EnclosingClass.FullDafnyName}.")) {
+                        Contract.Requires(e.expr is FunctionCallExpr);
+                        (e.expr as FunctionCallExpr).Name = (e.expr as FunctionCallExpr).Name.Substring(member.EnclosingClass.FullDafnyName.Length + 1);
+                    }
+                    var envId = CreateEnvironmentForCandidate(member, indInv, e);
+                    envIdList.Add(envId);
+                    Console.WriteLine($"{envId} -> {Printer.ExprToString(e.expr)}");
+                }
             }
-            Console.WriteLine(DNFGraphGraphviz);
-
+            await dafnyVerifier.RunVerificationRequestsStartingFromEnvironment(0, false);
+            var lastProcessedEnvId = envIdList.Count;
+            if (DafnyOptions.O.HoleEvaluatorDepth > 1) {
+                Contract.Assert(DafnyOptions.O.HoleEvaluatorDepth <= 2);
+                for (int i = 0; i < singletonCandidateInvariants.Count; i++) {
+                    if (HasResultedIntoFalseInv(i)) {
+                        continue;
+                    }
+                    var e0 = singletonCandidateInvariants[i];
+                    if (e0.depth + 2 > DafnyOptions.O.HoleEvaluatorExpressionDepth) {
+                        continue;
+                    }
+                    for (int j = i + 1; j < singletonCandidateInvariants.Count; j++) {
+                        if (HasResultedIntoFalseInv(j)) {
+                           continue;
+                        }
+                        var e1 = singletonCandidateInvariants[j];
+                        if (e0.depth + e1.depth + 1 > DafnyOptions.O.HoleEvaluatorExpressionDepth) {
+                            continue;
+                        }
+                        {
+                            var andExpr = Expression.CreateAnd(e0.expr, e1.expr);
+                            var candidate = new ExpressionFinder.ExpressionDepth(andExpr, e0.depth + e1.depth + 1, false);
+                            candidateInvariants.Add(candidate);
+                            var envId = CreateEnvironmentForCandidate(member, indInv, candidate);
+                            envIdList.Add(envId);
+                            Console.WriteLine($"{envId} -> {Printer.ExprToString(candidate.expr)}");
+                        }
+                        {
+                            var orExpr = Expression.CreateOr(e0.expr, e1.expr);
+                            var candidate = new ExpressionFinder.ExpressionDepth(orExpr, e0.depth + e1.depth + 1, false);
+                            candidateInvariants.Add(candidate);
+                            var envId = CreateEnvironmentForCandidate(member, indInv, candidate);
+                            envIdList.Add(envId);
+                            Console.WriteLine($"{envId} -> {Printer.ExprToString(candidate.expr)}");
+                        }
+                        if (e0.isNegateOfAnotherExpression || e1.isNegateOfAnotherExpression) 
+                        {
+                            continue;
+                        }
+                        {
+                            var eqExpr = Expression.CreateEq(e0.expr, e1.expr, e0.expr.Type);
+                            var candidate = new ExpressionFinder.ExpressionDepth(eqExpr, e0.depth + e1.depth + 1, false);
+                            candidateInvariants.Add(candidate);
+                            var envId = CreateEnvironmentForCandidate(member, indInv, candidate);
+                            envIdList.Add(envId);
+                            Console.WriteLine($"{envId} -> {Printer.ExprToString(candidate.expr)}");
+                        }
+                        {
+                            var neqExpr = Expression.CreateNot(e0.expr.tok, Expression.CreateEq(e0.expr, e1.expr, e0.expr.Type));
+                            var candidate = new ExpressionFinder.ExpressionDepth(neqExpr, e0.depth + e1.depth + 1, true);
+                            candidateInvariants.Add(candidate);
+                            var envId = CreateEnvironmentForCandidate(member, indInv, candidate);
+                            envIdList.Add(envId);
+                            Console.WriteLine($"{envId} -> {Printer.ExprToString(candidate.expr)}");
+                        }
+                    }
+                }
+            }
+            // return false;
+            await dafnyVerifier.RunVerificationRequestsStartingFromEnvironment(lastProcessedEnvId, false);
+            HashSet<int> correctEnvironments = new HashSet<int>();
+            int passingPrerequisiteCount = 0;
+            for (int i = 0; i < envIdList.Count; i++)
+            {
+                var failingProofs = IsPassingPartialSelfInductiveTest(i);
+                if (EnvIdToFailingProofs.ContainsKey(i)) {
+                    if (EnvIdToFailingProofs[i].Count == 0) {
+                        Console.WriteLine($"correct solution: {i}");
+                        correctEnvironments.Add(i);
+                    }
+                }
+                if (IsCandidatePassPrerequisites(i)) {
+                    passingPrerequisiteCount++;
+                }
+            }
+            Console.WriteLine($"{dafnyVerifier.sw.ElapsedMilliseconds / 1000}:: correct solutions found: {correctEnvironments.Count}");
+            Console.WriteLine($"{dafnyVerifier.sw.ElapsedMilliseconds / 1000}:: candidates passing prerequisites: {passingPrerequisiteCount}");
+            Console.WriteLine($"{dafnyVerifier.sw.ElapsedMilliseconds / 1000}:: number of environments checked: {envIdList.Count}");
             if (DafnyOptions.O.HoleEvaluatorLogOutputs != "") {
                 try {
                     var outputDir = DafnyOptions.O.HoleEvaluatorLogOutputs;
@@ -487,6 +812,13 @@ namespace Microsoft.Dafny {
                     Console.WriteLine($"Error while writing logs: {e.ToString()}");
                 }
             }
+            return true;
+            var DNFGraphGraphviz = ConvertDNFGraphToGraphviz(rootDNFnode);
+            if (DafnyOptions.O.LogDotGraph != "") {
+                File.WriteAllText(DafnyOptions.O.LogDotGraph, DNFGraphGraphviz);
+            }
+            Console.WriteLine(DNFGraphGraphviz);
+
             // Console.WriteLine(ConvertCallGraphToGraphViz(CG));
             return true;
         }

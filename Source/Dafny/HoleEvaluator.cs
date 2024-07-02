@@ -51,7 +51,7 @@ namespace Microsoft.Dafny {
       if (constraintFunc != null) {
         Dictionary<string, HashSet<ExpressionFinder.ExpressionDepth>> typeToExpressionDictForInputs = new Dictionary<string, HashSet<ExpressionFinder.ExpressionDepth>>();
         foreach (var formal in baseFunc.Formals) {
-          var identExpr = new ExpressionFinder.ExpressionDepth(Expression.CreateIdentExpr(formal), 1);
+          var identExpr = new ExpressionFinder.ExpressionDepth(Expression.CreateIdentExpr(formal), 1, false);
           var typeString = formal.Type.ToString();
           if (typeToExpressionDictForInputs.ContainsKey(typeString)) {
             typeToExpressionDictForInputs[typeString].Add(identExpr);
@@ -64,7 +64,7 @@ namespace Microsoft.Dafny {
         var funcCalls = ExpressionFinder.GetAllPossibleFunctionInvocations(program, constraintFunc, typeToExpressionDictForInputs);
         foreach (var funcCall in funcCalls) {
           if (constraintExpr == null) {
-            constraintExpr = new ExpressionFinder.ExpressionDepth(funcCall.expr, 1);
+            constraintExpr = new ExpressionFinder.ExpressionDepth(funcCall.expr, 1, false);
           } else {
             constraintExpr.expr = Expression.CreateAnd(constraintExpr.expr, funcCall.expr);
           }
@@ -1001,13 +1001,20 @@ namespace Microsoft.Dafny {
     }
 
 
-    public static Tuple<List<string>, string> GetFunctionParamList(Function func, string namePrefix = "") {
+    public static Tuple<List<string>, string> GetFunctionParamList(Function func, string namePrefix = "", bool includeModuleInTypes = true) {
       var funcName = func.FullDafnyName;
       string parameterNameTypes = "";
       List<string> paramNames = new List<string>();
       var sep = "";
       foreach (var param in func.Formals) {
-        parameterNameTypes += sep + namePrefix + param.Name + ":" + Printer.GetFullTypeString(func.EnclosingClass.EnclosingModuleDefinition, param.Type, new HashSet<ModuleDefinition>());
+        if (includeModuleInTypes) 
+        {
+          parameterNameTypes += sep + namePrefix + param.Name + ":" + Printer.GetFullTypeString(func.EnclosingClass.EnclosingModuleDefinition, param.Type, new HashSet<ModuleDefinition>());
+        } 
+        else 
+        {
+          parameterNameTypes += sep + namePrefix + param.Name + ":" + param.Type;
+        }
         paramNames.Add(namePrefix + param.Name);
         sep = ", ";
       }
@@ -1124,7 +1131,10 @@ namespace Microsoft.Dafny {
 
     public static MemberDecl GetMemberFromUnresolved(Program program, string memberName) {
       int index = memberName.IndexOf('.');
-      string moduleName = memberName.Remove(index);
+      string moduleName = memberName;
+      if (index != -1) {
+        moduleName = memberName.Remove(index);
+      }
       foreach (var topLevelDecl in program.DefaultModuleDef.TopLevelDecls) {
         if (topLevelDecl.FullDafnyName == moduleName) {
           var lmd = topLevelDecl as LiteralModuleDecl;

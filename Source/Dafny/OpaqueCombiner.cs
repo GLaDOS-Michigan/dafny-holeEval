@@ -369,7 +369,7 @@ namespace Microsoft.Dafny {
             EnvIdToChangeList[combinedEnvId] = ConvertToProtoChangeList(changeList);
             finalEnvironments.Add(combinedEnvId);
             foreach (var task in tasksListDictionary) {
-                dafnyVerifier.AddVerificationRequestToEnvironment(combinedEnvId, "", task.Key, task.Value.Arguments.ToList());
+                dafnyVerifier.AddVerificationRequestToEnvironment(combinedEnvId, "", task.Key, task.Value.Arguments.ToList(), false, true);
             }
             await dafnyVerifier.RunVerificationRequestsStartingFromEnvironment(0, true);
             if (DafnyOptions.O.HoleEvaluatorLogOutputs != "") {

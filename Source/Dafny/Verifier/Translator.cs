@@ -6177,7 +6177,11 @@ namespace Microsoft.Dafny {
 
       } else if (expr is ConcreteSyntaxExpression) {
         var e = (ConcreteSyntaxExpression)expr;
-        CheckWellformedWithResult(e.ResolvedExpression, options, result, resultType, locals, builder, etran);
+        if (e.ResolvedExpression != null) {
+          CheckWellformedWithResult(e.ResolvedExpression, options, result, resultType, locals, builder, etran);
+        } else {
+          result = null;
+        }
         result = null;
 
       } else if (expr is BoogieFunctionCall) {

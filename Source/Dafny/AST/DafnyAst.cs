@@ -10516,7 +10516,7 @@ namespace Microsoft.Dafny {
   }
 
   public class FunctionCallExpr : Expression {
-    public readonly string Name;
+    public string Name;
     public readonly Expression Receiver;
     public readonly IToken OpenParen;  // can be null if Args.Count == 0
     public readonly Label/*?*/ AtLabel;
@@ -11199,6 +11199,12 @@ namespace Microsoft.Dafny {
 
     public override IEnumerable<Expression> SubExpressions {
       get {
+        foreach (var e in E0.SubExpressions) {
+          yield return e;
+        }
+        foreach (var e in E1.SubExpressions) {
+          yield return e;
+        }
         yield return E0;
         yield return E1;
       }

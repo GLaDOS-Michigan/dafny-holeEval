@@ -241,12 +241,12 @@ namespace Microsoft.Dafny {
                 if (callable is Method method) {
                     baseArgs.Add($"/proc:*{method.FullSanitizedName}");
                     var timeLimitMultiplier = GetTimelimitMultiplier(method.Attributes) * rlimitMultiplier;
-                    dafnyVerifier.AddVerificationRequestToEnvironment(envId, "", filename, baseArgs, $"{timeLimitMultiplier}m", rlimitMultiplier);
+                    dafnyVerifier.AddVerificationRequestToEnvironment(envId, "", filename, baseArgs, false, true, $"{timeLimitMultiplier}m", rlimitMultiplier);
                     baseArgs.RemoveAt(baseArgs.Count - 1);
                 } else if (callable is Function func) {
                     baseArgs.Add($"/proc:*{func.FullSanitizedName}");
                     var timeLimitMultiplier = GetTimelimitMultiplier(func.Attributes) * rlimitMultiplier;
-                    dafnyVerifier.AddVerificationRequestToEnvironment(envId, "", filename, baseArgs, $"{timeLimitMultiplier}m", rlimitMultiplier);
+                    dafnyVerifier.AddVerificationRequestToEnvironment(envId, "", filename, baseArgs, false, true, $"{timeLimitMultiplier}m", rlimitMultiplier);
                     baseArgs.RemoveAt(baseArgs.Count - 1);
                 } else {
                     throw new NotSupportedException($"Do not support adding verification requests for {callable.ToString()}");
@@ -558,7 +558,7 @@ namespace Microsoft.Dafny {
                         //     argList.Add($"/proc:*{sanitizedFuncName}*");
                         // }
                         // argList = argList.Distinct().ToList();
-                        dafnyVerifier.AddVerificationRequestToEnvironment(envId, "", file, argList, timeout);
+                        dafnyVerifier.AddVerificationRequestToEnvironment(envId, "", file, argList, false, true, timeout);
                     }
                     if (envId > newEndEnvId)
                     {
@@ -609,7 +609,7 @@ namespace Microsoft.Dafny {
             EnvIdToChangeList[noChangeEnvId] = null;
             EnvIdToNonOpaqueFunc[noChangeEnvId] = null;
             foreach (var task in tasksListDictionary) {
-                dafnyVerifier.AddVerificationRequestToEnvironment(noChangeEnvId, "", task.Key, task.Value.Arguments.ToList());
+                dafnyVerifier.AddVerificationRequestToEnvironment(noChangeEnvId, "", task.Key, task.Value.Arguments.ToList(), false, true);
             }
             Console.WriteLine($"envId={noChangeEnvId}\tno change environment");
             foreach (var envId in correctEnvironments) {
@@ -619,7 +619,7 @@ namespace Microsoft.Dafny {
                 Console.WriteLine($"envId={newEnvId}\tfinal execution of making {EnvIdToNonOpaqueFunc[envId].FullDafnyName} opaque");
                 finalEnvironments.Add(newEnvId);
                 foreach (var task in tasksListDictionary) {
-                    dafnyVerifier.AddVerificationRequestToEnvironment(newEnvId, "", task.Key, task.Value.Arguments.ToList());
+                    dafnyVerifier.AddVerificationRequestToEnvironment(newEnvId, "", task.Key, task.Value.Arguments.ToList(), false, true);
                 }
             }
             await dafnyVerifier.RunVerificationRequestsStartingFromEnvironment(noChangeEnvId, true);
